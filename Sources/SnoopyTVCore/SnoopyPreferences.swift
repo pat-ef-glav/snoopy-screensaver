@@ -56,6 +56,39 @@ public enum SnoopyPreferences {
     public static let weatherLocationKey = "SnoopyWeatherLocation"
     public static let selectionMemoryKey = "SnoopySelectionMemory"
 
+    // Host playback settings, shared by the wallpaper app and the saver.
+    public static let playbackRateKey = "SnoopyPlaybackRate"
+    public static let onBatteryModeKey = "SnoopyOnBatteryMode"
+    public static let pauseWhenHiddenKey = "SnoopyPauseWhenHidden"
+    public static let wallpaperEnabledKey = "SnoopyWallpaperEnabled"
+
+    /// Playback speed multiplier (1 = authored speed). Applied to video rate and
+    /// the HEIC frame clock by SnoopySceneView; scene budgets stay in wall time.
+    public static var playbackRate: Double {
+        get {
+            let value = defaults.double(forKey: playbackRateKey)
+            return value > 0 ? min(max(value, 0.25), 4.0) : 1.0
+        }
+        set { defaults.set(newValue, forKey: playbackRateKey) }
+    }
+
+    public static var onBatteryMode: SnoopyOnBatteryMode {
+        get { SnoopyOnBatteryMode(rawValue: defaults.integer(forKey: onBatteryModeKey)) ?? .keepPlaying }
+        set { defaults.set(newValue.rawValue, forKey: onBatteryModeKey) }
+    }
+
+    /// Pause the wallpaper while other windows cover most of the screen.
+    public static var pauseWhenHidden: Bool {
+        get { defaults.object(forKey: pauseWhenHiddenKey) == nil ? true : defaults.bool(forKey: pauseWhenHiddenKey) }
+        set { defaults.set(newValue, forKey: pauseWhenHiddenKey) }
+    }
+
+    /// Whether the desktop wallpaper is shown (the menu-bar app's main toggle).
+    public static var wallpaperEnabled: Bool {
+        get { defaults.object(forKey: wallpaperEnabledKey) == nil ? true : defaults.bool(forKey: wallpaperEnabledKey) }
+        set { defaults.set(newValue, forKey: wallpaperEnabledKey) }
+    }
+
     public static var weatherEnabled: Bool {
         get {
             if defaults.object(forKey: weatherEnabledKey) != nil {
@@ -87,5 +120,21 @@ public enum SnoopyPreferences {
             defaults.set(data, forKey: weatherLocationKey)
         }
         defaults.set(weatherLocation.name, forKey: cityNameKey)
+    }
+}
+
+/// What the wallpaper does when the Mac runs on battery (mirrors Aerial's
+/// keepEnabled / alwaysDisabled / disableOnLow).
+public enum SnoopyOnBatteryMode: Int, CaseIterable, Sendable {
+    case keepPlaying = 0
+    case pause = 1
+    case pauseWhenLow = 2
+
+    public var title: String {
+        switch self {
+        case .keepPlaying: return "Keep playing"
+        case .pause: return "Pause"
+        case .pauseWhenLow: return "Pause when battery is low"
+        }
     }
 }

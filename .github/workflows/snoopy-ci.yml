@@ -9,8 +9,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: swift --version
+      # Builds every product, including the SnoopyWallpaper menu-bar app.
       - run: swift build -c release
       - run: swift test
+      # Assemble the .app bundle (no media in CI) and validate its structure.
+      - run: SNOOPY_SKIP_BUILD=1 SNOOPY_ASSETS=none sh scripts/build_wallpaper_app.sh
+      - run: plutil -lint .build/SnoopyWallpaper.app/Contents/Info.plist && test -x .build/SnoopyWallpaper.app/Contents/MacOS/SnoopyWallpaper
 
   saver:
     name: Screen saver — xcodebuild

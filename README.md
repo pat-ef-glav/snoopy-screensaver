@@ -89,6 +89,19 @@ xcodebuild \
 
 Supported processor architectures depend on the Xcode Build Settings and the resulting build output.
 
+### Desktop wallpaper app
+
+The same engine can run as a live desktop wallpaper (behind windows and icons,
+every display) with playback-speed and power settings in the menu bar:
+
+```sh
+sh scripts/build_wallpaper_app.sh              # → .build/SnoopyWallpaper.app
+SNOOPY_INSTALL=1 sh scripts/build_wallpaper_app.sh   # install to /Applications and launch
+```
+
+See [docs/WALLPAPER.md](docs/WALLPAPER.md). The Swift package also builds it
+with plain `swift build` (targets `SnoopySceneKit` + `SnoopyWallpaper`).
+
 If the project includes a post-build installation script, a successful build will install `SNOOPY.saver` to:
 
 ```text

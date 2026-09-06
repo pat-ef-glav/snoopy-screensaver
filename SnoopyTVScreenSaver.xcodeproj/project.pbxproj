@@ -29,6 +29,7 @@
 		A027 /* SelectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B030 /* SelectionPolicy.swift */; };
 		A028 /* WeatherSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B031 /* WeatherSupport.swift */; };
 		A029 /* SnoopyConfigurationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B032 /* SnoopyConfigurationController.swift */; };
+		A030 /* SnoopySceneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B033 /* SnoopySceneView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -57,6 +58,7 @@
 		B030 /* SelectionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionPolicy.swift; sourceTree = "<group>"; };
 		B031 /* WeatherSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherSupport.swift; sourceTree = "<group>"; };
 		B032 /* SnoopyConfigurationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnoopyConfigurationController.swift; sourceTree = "<group>"; };
+		B033 /* SnoopySceneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnoopySceneView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -77,6 +79,7 @@
 			isa = PBXGroup;
 			children = (
 				D002 /* Sources/SnoopyTVCore */,
+				D008 /* Sources/SnoopySceneKit */,
 				D003 /* ScreenSaver */,
 				D004 /* Frameworks */,
 				D007 /* Resources */,
@@ -103,11 +106,19 @@
 			path = Sources/SnoopyTVCore;
 			sourceTree = "<group>";
 		};
+		D008 /* Sources/SnoopySceneKit */ = {
+			isa = PBXGroup;
+			children = (
+				B033 /* SnoopySceneView.swift */,
+				B032 /* SnoopyConfigurationController.swift */,
+			);
+			path = Sources/SnoopySceneKit;
+			sourceTree = "<group>";
+		};
 		D003 /* ScreenSaver */ = {
 			isa = PBXGroup;
 			children = (
 				B006 /* SnoopySaverView.swift */,
-				B032 /* SnoopyConfigurationController.swift */,
 				B010 /* Info.plist */,
 			);
 			path = ScreenSaver;
@@ -249,6 +260,7 @@
 				A027 /* SelectionPolicy.swift in Sources */,
 				A028 /* WeatherSupport.swift in Sources */,
 				A029 /* SnoopyConfigurationController.swift in Sources */,
+				A030 /* SnoopySceneView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

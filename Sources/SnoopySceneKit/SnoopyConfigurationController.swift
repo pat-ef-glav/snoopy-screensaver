@@ -1,4 +1,7 @@
 import AppKit
+#if canImport(SnoopyTVCore)
+import SnoopyTVCore // Swift package build; the Xcode target compiles the core sources directly
+#endif
 
 private final class SnoopyConfigurationBackgroundView: NSView {
     override func draw(_ dirtyRect: NSRect) {
@@ -13,14 +16,14 @@ private final class SnoopyConfigurationBackgroundView: NSView {
 }
 
 @MainActor
-final class SnoopyConfigurationController: NSObject {
+public final class SnoopyConfigurationController: NSObject {
     private let panel: NSPanel
     private let enabledButton = NSButton(checkboxWithTitle: "根据当地天气插播场景和动画", target: nil, action: nil)
     private let cityField = NSTextField(string: "")
     private let statusLabel = NSTextField(wrappingLabelWithString: "")
     private let saveButton = NSButton(title: "保存并更新天气", target: nil, action: nil)
 
-    override init() {
+    public override init() {
         panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
             styleMask: [.titled], backing: .buffered, defer: false
@@ -29,7 +32,7 @@ final class SnoopyConfigurationController: NSObject {
         buildInterface()
     }
 
-    var window: NSWindow {
+    public var window: NSWindow {
         reload()
         return panel
     }
