@@ -64,3 +64,26 @@ stationary, never becomes key, ignores the mouse, has no shadow and is opaque
 black, hosting a `SnoopySceneView` driven by its own 30 Hz clock
 (`startClock()`); HEIC sequences advance from a `CVDisplayLink` inside the view.
 This is the recipe Aerial's desktop mode and other wallpaper apps use.
+
+## First run and troubleshooting
+
+1. `sh scripts/build_wallpaper_app.sh` then `open .build/SnoopyWallpaper.app` — a dog icon
+   appears in the menu bar and Snoopy should start on every display within a few seconds.
+2. Watch the engine's log while it runs:
+
+   ```sh
+   log stream --style compact --predicate 'process == "SnoopyWallpaper"'
+   ```
+
+   The compositor logs with the `SnoopyTVScreenSaver:` prefix (asset index found, derived
+   proxies, HEIC display link, scene changes). "未找到 asset-index.json" means the bundle has
+   no index — rebuild after placing `Resources/SnoopyAssets`.
+3. Black windows but no errors: the assets folder is missing or empty in the bundle
+   (`ls .build/SnoopyWallpaper.app/Contents/Resources/SnoopyAssets | head`).
+4. Snoopy appears above your desktop icons, or not at all: adjust the window level and relaunch:
+
+   ```sh
+   defaults write com.dingdangnao.snoopy.shared SnoopyWallpaperLevelOffset -int -1
+   ```
+5. Nothing plays and the menu says "Paused: covered by windows": that display is more than
+   60 % covered; hide some windows or turn off *Pause When Covered by Windows*.
