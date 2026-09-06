@@ -334,7 +334,10 @@ final class SelectionTests: XCTestCase {
             for: character, in: sixteenByTen, sceneOffset: PointRecord(x: 96, y: -54)
         )
         XCTAssertEqual(offsetCharacter.origin.x, 48, accuracy: 0.001)
-        XCTAssertEqual(offsetCharacter.origin.y, 3, accuracy: 0.001)
+        // sceneOffset is authored in tvOS/UIKit coordinates (y grows downward), so
+        // y = -54 moves the scene UP: 30 (fit origin) + 54 * 0.5 = 57 in AppKit's
+        // upward-positive space. See SpritePlacementResolver.frame(for:in:sceneOffset:).
+        XCTAssertEqual(offsetCharacter.origin.y, 57, accuracy: 0.001)
         XCTAssertEqual(offsetCharacter.size, characterFit.size)
 
         let ultrawide = CGRect(x: 0, y: 0, width: 1200, height: 500)
