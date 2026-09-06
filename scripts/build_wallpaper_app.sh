@@ -10,6 +10,7 @@
 #   SNOOPY_BUILD_CONFIG  release (default) | debug
 #   SNOOPY_ASSETS        copy (default) | link | none
 #   SNOOPY_SKIP_BUILD=1  reuse an existing `swift build` product
+#   SNOOPY_SKIP_PROXY_BUILD=1  do not obtain derived media (HEVC-alpha proxies of the HEIC sequences)
 #   SNOOPY_APP_OUTPUT    bundle path (default .build/SnoopyWallpaper.app)
 #   SNOOPY_APP_VERSION   CFBundleShortVersionString/CFBundleVersion (default 1.0)
 #   SNOOPY_ICON_SOURCE   image for the app icon (default Resources/ScreenSaverPreview.png)
@@ -24,6 +25,28 @@ VERSION="${SNOOPY_APP_VERSION:-1.0}"
 
 if [ "${SNOOPY_SKIP_BUILD:-0}" != "1" ]; then
   swift build --package-path "$ROOT" -c "$CONFIG" --product SnoopyWallpaper
+fi
+
+# Derived media: HEVC-alpha proxies of every HEIC frame sequence (base-pose loops,
+# pose/reaction transitions, idle scenes, wipe masks). Without them those loops are
+# decoded from 4K HEIC files live, which stutters. Reuse an installed saver's copy
+# when one exists, otherwise build them once (several minutes for the full package).
+DERIVED="$ROOT/.derived-media"
+if [ ! -f "$DERIVED/derived-media-index.json" ] && [ "${SNOOPY_SKIP_PROXY_BUILD:-0}" != "1" ]; then
+  for saver in "$HOME/Library/Screen Savers"/*.saver "/Library/Screen Savers"/*.saver; do
+    if [ -f "$saver/Contents/Resources/DerivedMedia/derived-media-index.json" ]; then
+      echo "Reusing derived media from $saver"
+      rm -rf "$DERIVED"
+      ditto "$saver/Contents/Resources/DerivedMedia" "$DERIVED"
+      break
+    fi
+  done
+  if [ ! -f "$DERIVED/derived-media-index.json" ] && [ -d "$ROOT/Resources/SnoopyAssets" ]; then
+    echo "Building derived media proxies (one-time; this takes a while)..."
+    swift build --package-path "$ROOT" -c release --product SnoopySequenceProxyBuilder
+    "$ROOT/.build/release/SnoopySequenceProxyBuilder" \
+      --index "$ROOT/Resources/asset-index.json" --output "$DERIVED"
+  fi
 fi
 BIN="$ROOT/.build/$CONFIG/SnoopyWallpaper"
 if [ ! -x "$BIN" ]; then

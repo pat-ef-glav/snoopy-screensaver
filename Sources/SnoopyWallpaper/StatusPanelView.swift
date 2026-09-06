@@ -2,13 +2,16 @@ import Combine
 import SnoopyTVCore
 import SwiftUI
 
-/// The status-item panel: a compact card in the style of Klack / Little Snitch.
+/// The status-item panel: a frosted card in the style of Klack / Little Snitch.
 struct StatusPanelView: View {
     @ObservedObject var model: WallpaperModel
     private let clock = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
+    private let cardWidth: CGFloat = 340
+    private var contentWidth: CGFloat { cardWidth - 32 }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             header
             Divider()
             sceneSection
@@ -21,8 +24,9 @@ struct StatusPanelView: View {
             Divider()
             footer
         }
-        .padding(14)
-        .frame(width: 320)
+        .padding(16)
+        .frame(width: cardWidth)
+        .background(.ultraThickMaterial)
         .onAppear { model.refresh() }
         .onReceive(clock) { _ in model.refresh() }
     }
@@ -31,9 +35,9 @@ struct StatusPanelView: View {
 
     private var header: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Snoopy").font(.headline)
-                Text(model.status).font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Snoopy").font(.title2.weight(.semibold))
+                Text(model.status).font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
             Toggle("", isOn: Binding(get: { model.isEnabled }, set: { model.setEnabled($0) }))
@@ -43,16 +47,16 @@ struct StatusPanelView: View {
     }
 
     private var sceneSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             sectionTitle("Scene")
-            thumbnail(model.currentThumbnail, width: 292, height: 164)
+            thumbnail(model.currentThumbnail, width: contentWidth, height: contentWidth * 9 / 16)
                 .overlay(alignment: .bottomLeading) {
                     if let id = model.currentSceneID {
                         Text(Self.sceneTitle(id))
-                            .font(.caption2.weight(.medium))
-                            .padding(.horizontal, 6).padding(.vertical, 3)
+                            .font(.callout.weight(.medium))
+                            .padding(.horizontal, 8).padding(.vertical, 4)
                             .background(.thinMaterial, in: Capsule())
-                            .padding(6)
+                            .padding(8)
                     }
                 }
             HStack(spacing: 8) {
@@ -66,15 +70,14 @@ struct StatusPanelView: View {
                     .disabled(!model.isEnabled)
             }
             .buttonStyle(.bordered)
-            .controlSize(.small)
             if !model.upcoming.isEmpty {
-                Text("Up next, by chance").font(.caption).foregroundStyle(.secondary)
+                Text("Up next, by chance").font(.callout).foregroundStyle(.secondary)
                 HStack(spacing: 8) {
                     ForEach(model.upcoming) { choice in
-                        VStack(spacing: 3) {
-                            thumbnail(choice.thumbnail, width: 92, height: 52)
+                        VStack(spacing: 4) {
+                            thumbnail(choice.thumbnail, width: (contentWidth - 16) / 3, height: (contentWidth - 16) / 3 * 9 / 16)
                             Text("\(Int((choice.chance * 100).rounded())) %")
-                                .font(.caption2).foregroundStyle(.secondary)
+                                .font(.callout).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -83,20 +86,20 @@ struct StatusPanelView: View {
     }
 
     private var speedSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             speedRow("Wallpaper Speed", value: model.wallpaperRate) { model.setWallpaperRate($0) }
             speedRow("Screen Saver Speed", value: model.saverRate) { model.setSaverRate($0) }
         }
     }
 
     private var powerSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             if model.hasBattery {
                 sectionTitle("On Battery")
                 ForEach(SnoopyOnBatteryMode.allCases, id: \.self) { mode in
                     Button { model.setOnBatteryMode(mode) } label: {
                         HStack {
-                            Text(mode.title)
+                            Text(mode.title).font(.body)
                             Spacer()
                             if model.onBatteryMode == mode {
                                 Image(systemName: "checkmark").font(.body.weight(.semibold))
@@ -107,56 +110,57 @@ struct StatusPanelView: View {
                     .buttonStyle(.plain)
                 }
             }
-            Toggle("Pause When Covered by Windows",
-                   isOn: Binding(get: { model.pauseWhenHidden }, set: { model.setPauseWhenHidden($0) }))
-                .toggleStyle(.switch)
-                .controlSize(.small)
+            Toggle(isOn: Binding(get: { model.pauseWhenHidden }, set: { model.setPauseWhenHidden($0) })) {
+                Text("Pause When Covered by Windows").font(.body)
+            }
+            .toggleStyle(.switch)
         }
     }
 
     private var weatherSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             sectionTitle("Weather")
-            Text(model.weatherText).font(.caption).foregroundStyle(.secondary)
+            Text(model.weatherText).font(.callout).foregroundStyle(.secondary)
             Button("Weather & Screen Saver Settings…") { model.showWeatherSettings() }
                 .buttonStyle(.plain)
+                .font(.body)
         }
     }
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle("Launch at Login",
-                   isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .disabled(!model.launchAtLoginAvailable)
-            Text("Version \(model.version)").font(.caption).foregroundStyle(.tertiary)
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle(isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) })) {
+                Text("Launch at Login").font(.body)
+            }
+            .toggleStyle(.switch)
+            .disabled(!model.launchAtLoginAvailable)
+            Text("Version \(model.version)").font(.callout).foregroundStyle(.tertiary)
             Button("Quit Snoopy Wallpaper") { model.quit() }
                 .buttonStyle(.plain)
+                .font(.body)
         }
     }
 
     // MARK: - Pieces
 
     private func sectionTitle(_ title: String) -> some View {
-        Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+        Text(title).font(.headline).foregroundStyle(.secondary)
     }
 
     private func speedRow(_ title: String, value: Double, set: @escaping (Double) -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 sectionTitle(title)
                 Spacer()
-                Text(SnoopyPreferences.playbackRateTitle(value)).font(.caption).monospacedDigit()
+                Text(SnoopyPreferences.playbackRateTitle(value)).font(.body).monospacedDigit()
             }
             Slider(value: Binding(get: { value }, set: { set($0) }), in: 0.5...2, step: 0.25)
-                .controlSize(.small)
         }
     }
 
     @ViewBuilder
     private func thumbnail(_ image: NSImage?, width: CGFloat, height: CGFloat) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
         Group {
             if let image {
                 Image(nsImage: image)
@@ -165,7 +169,7 @@ struct StatusPanelView: View {
             } else {
                 ZStack {
                     shape.fill(.quaternary)
-                    Image(systemName: "photo").foregroundStyle(.tertiary)
+                    Image(systemName: "photo").font(.title3).foregroundStyle(.tertiary)
                 }
             }
         }
@@ -173,7 +177,7 @@ struct StatusPanelView: View {
         .clipShape(shape)
     }
 
-    /// "104_IS033" → "Scene 33 (bundle 104)"; palettes and ids stay readable.
+    /// "104_IS033" → "Scene 33 · bundle 104"; other ids stay as they are.
     private static func sceneTitle(_ id: String) -> String {
         let parts = id.split(separator: "_")
         if parts.count == 2, parts[1].hasPrefix("IS"), let number = Int(parts[1].dropFirst(2)) {

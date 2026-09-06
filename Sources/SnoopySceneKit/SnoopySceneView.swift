@@ -2177,11 +2177,7 @@ public final class SnoopySceneView: NSView {
                     destination.preferredTransform = source.preferredTransform
                     copiedTransform = true
                 }
-                // Proxies record their decoder-only lead frame. Raw HEVC-with-alpha
-                // sources show the same empty drawable at t=0, which is visible as a
-                // one-frame transparent pulse at every intro/loop/outro boundary.
-                let trimSeconds = derivedMediaStore?.proxy(for: url)?.leadingDecodeTrim
-                    ?? (source.hasMediaCharacteristic(.containsAlphaChannel) ? 1.0 / 24.0 : 0)
+                let trimSeconds = derivedMediaStore?.proxy(for: url)?.leadingDecodeTrim ?? 0
                 let sourceStart = CMTime(seconds: trimSeconds, preferredTimescale: 600)
                 let sourceDuration = CMTimeSubtract(duration, sourceStart)
                 guard sourceDuration.isValid, CMTimeCompare(sourceDuration, .zero) > 0 else { return nil }
@@ -3006,9 +3002,12 @@ public final class SnoopySceneView: NSView {
         if nextIndex == 1 {
             NSLog("SnoopyTVScreenSaver: HEIC sequence advancing at display refresh")
         }
-        // Reset to the actual presentation time rather than catching up by
-        // skipping authored frames after a decode stall.
-        frameSequenceLastHostTime = hostTime
+        // Schedule from the ideal time so the sequence really runs at 24 fps
+        // (on a 60 Hz display anchoring to the vsync-quantised presentation
+        // time slows it to 20 fps), but never fall more than one interval
+        // behind: a decode stall costs at most one hurried frame afterwards,
+        // and authored frames are never skipped.
+        frameSequenceLastHostTime = max(frameSequenceLastHostTime + frameInterval, hostTime - frameInterval)
         preloadFrames(frameSequenceURLs, from: nextIndex + 1, count: 8,
                       generation: frameSequenceGeneration, maxPixelSize: frameSequenceMaxPixelSize)
     }

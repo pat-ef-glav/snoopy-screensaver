@@ -59,22 +59,27 @@ with `Tools/MakeAppIcon.swift`, cropped into the standard macOS rounded-square
 grid. Use another picture with `SNOOPY_ICON_SOURCE=path` and adjust the square
 crop with `SNOOPY_ICON_CROP="centerX centerY side"`.
 
-## Derived media (recommended)
+## Derived media (needed for smooth loops)
 
-Most character clips in the asset package are HEVC-with-alpha videos played as
-intro/loop/outro segments. The port's `SnoopySequenceProxyBuilder` re-encodes the
-HEIC frame sequences into the same kind of proxy so playback is cheaper on the CPU,
-and both the saver and the wallpaper app bundle the result if it exists:
+The base-pose loops (Snoopy resting, sleeping, …), the pose and reaction transitions,
+the idle-scene backgrounds and the wipe masks are HEIC frame sequences in the asset
+package. Played directly they are decoded from 4K HEIC files 24 times a second through
+a small cache, which stutters. The port's `SnoopySequenceProxyBuilder` re-encodes every
+frame sequence into an HEVC-with-alpha proxy, and both hosts play those instead.
+
+`scripts/build_wallpaper_app.sh` obtains them automatically: it reuses the `DerivedMedia`
+folder of an installed saver when one exists (the port's prebuilt `Snoopy TV.saver`
+ships one), otherwise it builds them once into `.derived-media` (several minutes).
+`SNOOPY_SKIP_PROXY_BUILD=1` skips this. `scripts/build_and_install.sh` builds them too.
+
+To check what a running build uses:
 
 ```sh
-swift build -c release --product SnoopySequenceProxyBuilder
-.build/release/SnoopySequenceProxyBuilder --index Resources/asset-index.json --output .derived-media
-# then rebuild the app and/or the saver
+log stream --style compact --predicate 'process == "SnoopyWallpaper"' | grep -E "proxy missing|decodeMisses|derived proxies"
 ```
 
-It is a one-time job (minutes for the full package). Without it playback still works:
-the engine falls back to decoding the HEIC frames directly and trims the empty first
-frame of every raw alpha segment itself.
+"derived proxies=0" or "proxy missing … falling back to HEIC" means the bundle has no
+proxies; a non-zero "decodeMisses" at the end of a composite is a live-decode stall.
 
 ## Settings storage
 
