@@ -6,8 +6,11 @@ import ScreenSaver
 
 /// Offline Apple TV-style Snoopy screen saver. Full-screen active-scene videos
 /// and metadata-driven HEIC composites share one randomized playback queue.
-@objc(DingDangSnoopySaverView)
-final class SnoopySaverView: ScreenSaverView {
+/// The playback/compositing engine, hostable by any window. `SnoopySaverView`
+/// (at the end of this file) is the thin ScreenSaver shell; a desktop-wallpaper
+/// host can embed this view directly and drive it with `start()`/`tick()`/`stop()`
+/// or let it run its own clock via `startClock()`.
+final class SnoopySceneView: NSView {
     private enum PlaybackKind { case video, composite }
     private enum TransitionStage: String { case hide, reveal }
     private enum PendingSceneStage {
@@ -130,11 +133,9 @@ final class SnoopySaverView: ScreenSaverView {
     private var startupFadeView: NSView?
     private var startupFadeHasBegun = false
     private var weatherRefreshTask: Task<Void, Never>?
-    private lazy var configurationController = SnoopyConfigurationController()
 
-    @objc(initWithFrame:isPreview:)
-    override init?(frame: NSRect, isPreview: Bool) {
-        super.init(frame: frame, isPreview: isPreview)
+    override init(frame: NSRect) {
+        super.init(frame: frame)
         configureView()
     }
 
@@ -144,7 +145,6 @@ final class SnoopySaverView: ScreenSaverView {
     }
 
     private func configureView() {
-        animationTimeInterval = 1.0 / 30.0
         wantsLayer = true
         layer?.backgroundColor = NSColor.black.cgColor
         installMemoryPressureHandler()
@@ -181,8 +181,7 @@ final class SnoopySaverView: ScreenSaverView {
         }
     }
 
-    override func startAnimation() {
-        super.startAnimation()
+    func start() {
         isStopping = false
         seed = UInt64.random(in: UInt64.min...UInt64.max)
         sessionState = PlaybackSessionState()
@@ -208,7 +207,7 @@ final class SnoopySaverView: ScreenSaverView {
         playNext()
     }
 
-    override func stopAnimation() {
+    func stop() {
         isStopping = true
         startupFadeView?.removeFromSuperview()
         startupFadeView = nil
@@ -217,19 +216,14 @@ final class SnoopySaverView: ScreenSaverView {
         weatherRefreshTask = nil
         cancelPendingAdvance()
         cleanCurrentPlayback()
-        super.stopAnimation()
     }
-
-    override var hasConfigureSheet: Bool { true }
-
-    override var configureSheet: NSWindow? { configurationController.window }
 
     override func draw(_ rect: NSRect) {
         (layer?.backgroundColor.map(NSColor.init(cgColor:)) ?? NSColor.black)?.setFill()
         rect.fill()
     }
 
-    override func animateOneFrame() {
+    func tick() {
         if !isStopping, !isPlaying, advanceWorkItem == nil {
             scheduleNext(after: 0.05)
         }
@@ -3095,4 +3089,70 @@ final class SnoopySaverView: ScreenSaverView {
         }
         transitionHostView?.frame = bounds
     }
+
+    // MARK: - Host clock (for hosts that are not a ScreenSaverView)
+
+    private var hostClock: Timer?
+
+    /// Drive `tick()` from an internal timer. A `ScreenSaverView` host calls
+    /// `tick()` from `animateOneFrame` instead and must not start this clock.
+    func startClock(interval: TimeInterval = 1.0 / 30.0) {
+        stopClock()
+        hostClock = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            self?.tick()
+        }
+    }
+
+    func stopClock() {
+        hostClock?.invalidate()
+        hostClock = nil
+    }
+}
+
+// MARK: - ScreenSaver shell
+
+/// Thin `.saver` host: forwards the ScreenSaver lifecycle to a `SnoopySceneView`.
+/// The principal class name (Info.plist `NSPrincipalClass`) is unchanged.
+@objc(DingDangSnoopySaverView)
+final class SnoopySaverView: ScreenSaverView {
+    private let scene: SnoopySceneView
+    private lazy var configurationController = SnoopyConfigurationController()
+
+    @objc(initWithFrame:isPreview:)
+    override init?(frame: NSRect, isPreview: Bool) {
+        scene = SnoopySceneView(frame: NSRect(origin: .zero, size: frame.size))
+        super.init(frame: frame, isPreview: isPreview)
+        embedScene()
+    }
+
+    required init?(coder: NSCoder) {
+        scene = SnoopySceneView(frame: .zero)
+        super.init(coder: coder)
+        embedScene()
+    }
+
+    private func embedScene() {
+        animationTimeInterval = 1.0 / 30.0
+        scene.frame = bounds
+        scene.autoresizingMask = [.width, .height]
+        addSubview(scene)
+    }
+
+    override func startAnimation() {
+        super.startAnimation()
+        scene.start()
+    }
+
+    override func stopAnimation() {
+        scene.stop()
+        super.stopAnimation()
+    }
+
+    override func animateOneFrame() {
+        scene.tick()
+    }
+
+    override var hasConfigureSheet: Bool { true }
+
+    override var configureSheet: NSWindow? { configurationController.window }
 }
