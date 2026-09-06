@@ -32,6 +32,7 @@ copying it (fine for a local build). If `.derived-media` exists (created by
 | Item | What it does |
 |---|---|
 | Show Snoopy on the Desktop | Master on/off. Off hides the windows; the system wallpaper shows. |
+| Restart Snoopy | Starts fresh sessions on every display (also a recovery hatch if playback ever stalls). |
 | Wallpaper Speed / Screen Saver Speed | 0.5× … 2×, one setting per host. Video players run at that rate and the HEIC frame clock is scaled. Scene budgets (~240 s per idle scene) and visitor schedules stay in wall time, as on tvOS. The screen saver's speed is also in its Options sheet. |
 | On Battery | *Keep playing*, *Pause*, or *Pause when battery is low* (< 20 %). Greyed out on desktops. |
 | Pause When Covered by Windows | Polls window coverage once a second (Aerial's algorithm: 50×50 grid, threshold 60 %) and pauses that display while it is mostly covered. |
@@ -46,6 +47,23 @@ the HEIC frame clock stops, and pending scene changes and watchdogs wait, so the
 same clip continues on resume (the idle-scene budget is shifted by the paused
 time). The window stays on screen, so you keep seeing Snoopy rather than the
 system wallpaper. Only turning the wallpaper off hides the windows.
+
+## Derived media (recommended)
+
+Most character clips in the asset package are HEVC-with-alpha videos played as
+intro/loop/outro segments. The port's `SnoopySequenceProxyBuilder` re-encodes the
+HEIC frame sequences into the same kind of proxy so playback is cheaper on the CPU,
+and both the saver and the wallpaper app bundle the result if it exists:
+
+```sh
+swift build -c release --product SnoopySequenceProxyBuilder
+.build/release/SnoopySequenceProxyBuilder --index Resources/asset-index.json --output .derived-media
+# then rebuild the app and/or the saver
+```
+
+It is a one-time job (minutes for the full package). Without it playback still works:
+the engine falls back to decoding the HEIC frames directly and trims the empty first
+frame of every raw alpha segment itself.
 
 ## Settings storage
 
@@ -90,3 +108,6 @@ This is the recipe Aerial's desktop mode and other wallpaper apps use.
    ```
 5. Nothing plays and the menu says "Paused: covered by windows": that display is more than
    60 % covered; hide some windows or turn off *Pause When Covered by Windows*.
+6. The menu says "Playing" but nothing moves: pick *Restart Snoopy*, then send the log lines
+   around "paused", "resumed", "recreating the display link" or "no playback progress" — the
+   engine logs each recovery step it takes.

@@ -50,6 +50,11 @@ final class WallpaperAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
         toggle.state = SnoopyPreferences.wallpaperEnabled ? .on : .off
         menu.addItem(toggle)
 
+        let restart = NSMenuItem(title: "Restart Snoopy", action: #selector(restartPlayback(_:)), keyEquivalent: "")
+        restart.target = self
+        restart.isEnabled = SnoopyPreferences.wallpaperEnabled
+        menu.addItem(restart)
+
         menu.addItem(speedMenuItem(for: .wallpaper, title: "Wallpaper Speed", action: #selector(selectWallpaperSpeed(_:))))
         menu.addItem(speedMenuItem(for: .screenSaver, title: "Screen Saver Speed", action: #selector(selectScreenSaverSpeed(_:))))
 
@@ -102,6 +107,10 @@ final class WallpaperAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
     }
 
     // MARK: - Actions
+
+    @objc private func restartPlayback(_ sender: Any?) {
+        controller.restart()
+    }
 
     @objc private func toggleEnabled(_ sender: Any?) {
         controller.setEnabled(!SnoopyPreferences.wallpaperEnabled)

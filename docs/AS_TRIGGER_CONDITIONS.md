@@ -4,7 +4,7 @@
 
 - The asset index contains 73 AS records representing 65 unique video IDs.
 - 49 unique videos have contextual conditions; the other 16 are generic videos.
-- Multiple conditions listed for one video use OR semantics. Matching any one condition makes the video eligible.
+- Conditions listed for one video are grouped by family (weather, time of day, calendar, routine, hourly event). Within a family any listed value matches (OR); every family present must match (AND). `101_AS001` therefore needs icy or snowy weather *and* winter; a list with a single family is a plain OR.
 - A match does not cause immediate playback. It only adds the video to the weighted random selection pool.
 - Matching videos compete with generic videos and remain subject to recent-play and long-term play-count balancing.
 - AS assets have no authored `dependencies` or `exclusions`; their restrictions come entirely from `info`.
@@ -13,9 +13,9 @@
 
 | Condition | AS videos |
 |---|---|
-| Icy, snowy, or winter | `101_AS001` |
-| Snowy, icy, or spring/fall/winter | `102_AS025` |
-| Sunny, clear, or summer | `102_AS026` |
+| Icy or snowy, in winter | `101_AS001` |
+| Snowy or icy, in spring/fall/winter | `102_AS025` |
+| Sunny or clear, in summer | `102_AS026` |
 | Stormy | `103_AS042` |
 | Windy | `103_AS043` |
 | Rainy or stormy | `103_AS045` |
@@ -56,13 +56,18 @@ The commute states overlap the ordinary `morning` or `brunch` state. They add `1
 | 18:00–22:59 | `evening` | `103_AS039`, `103_AS041`, `104_AS053`, `104_AS057` |
 | 23:00–05:59 | `lateNight` | `103_AS039`, `103_AS041`, `104_AS057`, `104_AS070` |
 
-Time-of-day and holiday entries also use OR semantics. Consequently:
+Time-of-day and holiday entries combine with AND across families. Consequently:
 
-- `104_AS057` is not holiday-only; it can appear on an ordinary evening or late night.
-- `103_AS039` is not Halloween-only; it can appear from an ordinary afternoon onward.
-- `103_AS041` is not limited to the first Peanuts comic-strip anniversary; it can appear in the evening or late at night.
-- `104_AS053` is not limited to New Year's Eve; it can appear on an ordinary evening.
-- `104_AS070` is not limited to New Year's Day; it can appear on an ordinary late night.
+- `104_AS057` plays only on Lunar New Year, New Year's Day or the Fourth of July, and only in the evening or late at night.
+- `103_AS039` plays only on Halloween, from the afternoon onward.
+- `103_AS041` plays only on the first Peanuts comic-strip anniversary, in the evening or late at night.
+- `104_AS053` plays only on New Year's Eve, in the evening.
+- `104_AS070` plays only on New Year's Day, late at night.
+
+Earlier revisions of this document described these lists as OR. The asset names only make sense
+with AND across families (`ScenePalette_Cloudy_Day`, `SceneTransitionPair_ClockWipeExcludeLateNightBadWeather`,
+the moon-phase visitors that list evening/lateNight plus one phase), and the runtime now evaluates
+them that way.
 
 ## Seasonal conditions
 

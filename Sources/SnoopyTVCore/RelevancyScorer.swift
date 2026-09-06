@@ -30,17 +30,44 @@ public struct RelevancyScorer: Sendable {
                 score += dependencyBoost(asset, context: context)
                 return score
             }
-            var matching = false
-            for candidate in info {
-                if let clauses = candidate.objectValue, matches(clauses, context: context) {
-                    matching = true
-                    score = max(score, specificity(clauses))
-                }
-            }
-            if !matching { return nil }
+            guard let familyScore = matchedFamilyScore(info, context: context) else { return nil }
+            score = familyScore
         }
         score += dependencyBoost(asset, context: context)
         return score
+    }
+
+    /// Evaluates an authored `info` list. Clauses are grouped by condition
+    /// family (timeOfDay, weather, calendar, routine, hourlyEvent): within a
+    /// family any clause may match (OR), and every family present must match
+    /// (AND). Apple's own asset names prove this reading: `ScenePalette_Cloudy_Day`
+    /// lists {cloudy} and {morning, afternoon}; the moon visitors list
+    /// {evening, lateNight} and one lunar phase; `ClockWipeExcludeLateNightBadWeather`
+    /// lists three times of day and five fair-weather conditions. Treating the
+    /// whole list as OR made every palette eligible on any day and put a full
+    /// moon in the afternoon sky. Returns the summed family specificity, or nil
+    /// when any family has no matching clause.
+    func matchedFamilyScore(_ info: [JSONValue], context: SelectionContext) -> Int? {
+        var order: [String] = []
+        var matched: [String: Bool] = [:]
+        var weights: [String: Int] = [:]
+        for candidate in info {
+            guard let clauses = candidate.objectValue, !clauses.isEmpty else { continue }
+            let family = clauses.keys.sorted().joined(separator: "+")
+            if matched[family] == nil {
+                order.append(family)
+                matched[family] = false
+                weights[family] = specificity(clauses)
+            }
+            if matches(clauses, context: context) { matched[family] = true }
+        }
+        guard !order.isEmpty else { return nil }
+        var total = 0
+        for family in order {
+            guard matched[family] == true else { return nil }
+            total += weights[family] ?? 0
+        }
+        return total
     }
 
     private func matches(_ clauses: [String: JSONValue], context: SelectionContext) -> Bool {
@@ -101,10 +128,7 @@ public struct RelevancyScorer: Sendable {
                 return false
             }
             if case .array(let infos) = object["info"], !infos.isEmpty {
-                return infos.contains { info in
-                    guard let clauses = info.objectValue else { return false }
-                    return matches(clauses, context: context)
-                }
+                return matchedFamilyScore(infos, context: context) != nil
             }
             return true
         }
@@ -125,11 +149,7 @@ public struct RelevancyScorer: Sendable {
                 return true
             }
             if case .array(let infos) = object["info"], !infos.isEmpty {
-                let matchesInfo = infos.contains { info in
-                    guard let clauses = info.objectValue else { return false }
-                    return matches(clauses, context: context)
-                }
-                return !matchesInfo
+                return matchedFamilyScore(infos, context: context) == nil
             }
             return object["category"]?.stringValue == nil
         }

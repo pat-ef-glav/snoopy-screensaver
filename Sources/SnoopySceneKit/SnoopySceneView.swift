@@ -158,6 +158,10 @@ public final class SnoopySceneView: NSView {
         wantsLayer = true
         layer?.backgroundColor = NSColor.black.cgColor
         installMemoryPressureHandler()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(screenParametersDidChange(_:)),
+            name: NSApplication.didChangeScreenParametersNotification, object: nil
+        )
         loadSelectionMemory()
         loadStore()
     }
@@ -194,6 +198,8 @@ public final class SnoopySceneView: NSView {
     public func start() {
         isStopping = false
         resetPauseState()
+        lastProgressAt = ProcessInfo.processInfo.systemUptime
+        stallRecoveryAttempted = false
         seed = UInt64.random(in: UInt64.min...UInt64.max)
         sessionState = PlaybackSessionState()
         pendingBasePoseID = nil
@@ -239,6 +245,35 @@ public final class SnoopySceneView: NSView {
         if !isStopping, !isPaused, !isPlaying, advanceWorkItem == nil {
             scheduleNext(after: 0.05)
         }
+        recoverFromStallIfNeeded()
+    }
+
+    /// Progress is a displayed HEIC frame, a player that is actually playing,
+    /// or a scheduled advance/watchdog/preroll timeout. Without any of those
+    /// the clip can never end on its own: first re-create the display link (it
+    /// can go silent after a display sleeps), then move on to the next clip.
+    private func recoverFromStallIfNeeded() {
+        guard isPlaying, !isPaused, !isStopping else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        if allPlayers.contains(where: { $0.timeControlStatus == .playing }) {
+            lastProgressAt = now
+            stallRecoveryAttempted = false
+            return
+        }
+        let stalledFor = now - lastProgressAt
+        if frameDisplayLink != nil, stalledFor > 3, !stallRecoveryAttempted {
+            stallRecoveryAttempted = true
+            lastProgressAt = now
+            NSLog("SnoopyTVScreenSaver: no HEIC frame for %.1fs; recreating the display link", stalledFor)
+            recreateFrameDisplayLink()
+            return
+        }
+        guard advanceWorkItem == nil, watchdogWorkItem == nil,
+              transitionPrerollTimeout == nil, compositePrerollTimeout == nil,
+              stalledFor > 10 else { return }
+        NSLog("SnoopyTVScreenSaver: no playback progress for %.1fs; advancing", stalledFor)
+        stallRecoveryAttempted = false
+        finishCurrentPlayback("stalled")
     }
 
     private func loadStore() {
@@ -308,6 +343,7 @@ public final class SnoopySceneView: NSView {
             self.playNext()
         }
         advanceWorkItem = work
+        advanceDeadline = ProcessInfo.processInfo.systemUptime + delay
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
@@ -655,6 +691,8 @@ public final class SnoopySceneView: NSView {
             self.finishCurrentPlayback("watchdog")
         }
         watchdogWorkItem = work
+        watchdogDeadline = installedAt + seconds
+        watchdogRearm = { [weak self] remaining in self?.installWatchdog(defaultSeconds: remaining) }
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
     }
 
@@ -679,6 +717,11 @@ public final class SnoopySceneView: NSView {
             self.completeSceneTransitionStage(stage, selection: selection, reason: "watchdog")
         }
         watchdogWorkItem = work
+        watchdogDeadline = installedAt + seconds
+        watchdogRearm = { [weak self] remaining in
+            self?.installTransitionWatchdog(defaultSeconds: remaining, generation: generation,
+                                            stage: stage, selection: selection)
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
     }
 
@@ -745,6 +788,7 @@ public final class SnoopySceneView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
+        lastProgressAt = ProcessInfo.processInfo.systemUptime
         let nextStagePreservesIdle: Bool
         if let first = pendingSceneStages.first,
            case .activeSceneWithReveal = first {
@@ -2130,7 +2174,11 @@ public final class SnoopySceneView: NSView {
                     destination.preferredTransform = source.preferredTransform
                     copiedTransform = true
                 }
-                let trimSeconds = derivedMediaStore?.proxy(for: url)?.leadingDecodeTrim ?? 0
+                // Proxies record their decoder-only lead frame. Raw HEVC-with-alpha
+                // sources show the same empty drawable at t=0, which is visible as a
+                // one-frame transparent pulse at every intro/loop/outro boundary.
+                let trimSeconds = derivedMediaStore?.proxy(for: url)?.leadingDecodeTrim
+                    ?? (source.hasMediaCharacteristic(.containsAlphaChannel) ? 1.0 / 24.0 : 0)
                 let sourceStart = CMTime(seconds: trimSeconds, preferredTimescale: 600)
                 let sourceDuration = CMTimeSubtract(duration, sourceStart)
                 guard sourceDuration.isValid, CMTimeCompare(sourceDuration, .zero) > 0 else { return nil }
@@ -2793,6 +2841,7 @@ public final class SnoopySceneView: NSView {
         let visitorControlsCompletion = visitorInstalled && visitorSeconds > estimatedSeconds
         keepRetiringPlaybackSurfaceAbove(sequenceView)
         frameView = sequenceView
+        lastProgressAt = ProcessInfo.processInfo.systemUptime
         currentAssetID = assetID
         pendingBasePoseID = pendingPoseID
         isPlaying = true
@@ -2881,6 +2930,19 @@ public final class SnoopySceneView: NSView {
         frameSequenceGeneration = generation
         frameSequenceMaxPixelSize = maxPixelSize
         frameSequenceVisitorControlsCompletion = visitorControlsCompletion
+        lastProgressAt = ProcessInfo.processInfo.systemUptime
+        return recreateFrameDisplayLink()
+    }
+
+    /// (Re)create the CVDisplayLink for the current frame sequence, keeping the
+    /// sequence position. Also used after a pause, on display changes and by the
+    /// stall recovery: a link created before a display slept or the display set
+    /// changed can stop delivering callbacks while still reporting as running.
+    @discardableResult
+    private func recreateFrameDisplayLink() -> Bool {
+        guard !frameSequenceURLs.isEmpty else { return false }
+        if let frameDisplayLink { CVDisplayLinkStop(frameDisplayLink) }
+        frameDisplayLink = nil
         var link: CVDisplayLink?
         guard CVDisplayLinkCreateWithActiveCGDisplays(&link) == kCVReturnSuccess,
               let link else { return false }
@@ -2893,7 +2955,14 @@ public final class SnoopySceneView: NSView {
             return kCVReturnSuccess
         }, context)
         frameDisplayLink = link
+        frameSequenceLastHostTime = 0
         return CVDisplayLinkStart(link) == kCVReturnSuccess
+    }
+
+    /// Display sleep/wake and arrangement changes can orphan a CVDisplayLink.
+    @objc private func screenParametersDidChange(_ note: Notification) {
+        guard frameDisplayLink != nil, !isPaused else { return }
+        recreateFrameDisplayLink()
     }
 
     private func advanceFrameSequence(hostTime: UInt64) {
@@ -2929,6 +2998,8 @@ public final class SnoopySceneView: NSView {
         frameView?.layer?.contents = image
         CATransaction.commit()
         frameSequenceIndex = nextIndex
+        lastProgressAt = ProcessInfo.processInfo.systemUptime
+        stallRecoveryAttempted = false
         if nextIndex == 1 {
             NSLog("SnoopyTVScreenSaver: HEIC sequence advancing at display refresh")
         }
@@ -3177,6 +3248,11 @@ public final class SnoopySceneView: NSView {
     private var pauseStartedAt: TimeInterval = 0
     private var pausedPlayers: [AVPlayer] = []
     private var deferredWhilePaused: [() -> Void] = []
+    private var watchdogDeadline: TimeInterval = 0
+    private var watchdogRearm: ((TimeInterval) -> Void)?
+    private var advanceDeadline: TimeInterval = 0
+    private var lastProgressAt: TimeInterval = 0
+    private var stallRecoveryAttempted = false
 
     /// Freeze playback on the current frame: video players pause where they
     /// are, the HEIC frame clock stops, and pending advances, watchdogs and
@@ -3187,6 +3263,20 @@ public final class SnoopySceneView: NSView {
         guard !isPaused, !isStopping else { return }
         isPaused = true
         pauseStartedAt = ProcessInfo.processInfo.systemUptime
+        // Hold the timers as well, so a short pause neither cuts the clip short
+        // (a watchdog firing at its original deadline) nor skips its advance.
+        if watchdogWorkItem != nil, let rearm = watchdogRearm {
+            let remaining = max(0.5, watchdogDeadline - pauseStartedAt)
+            watchdogWorkItem?.cancel()
+            watchdogWorkItem = nil
+            deferredWhilePaused.append { rearm(remaining) }
+        }
+        if advanceWorkItem != nil {
+            let remaining = max(0, advanceDeadline - pauseStartedAt)
+            advanceWorkItem?.cancel()
+            advanceWorkItem = nil
+            deferredWhilePaused.append { [weak self] in self?.scheduleNext(after: remaining) }
+        }
         pausedPlayers = allPlayers.filter { $0.rate != 0 }
         pausedPlayers.forEach { $0.pause() }
         if let frameDisplayLink { CVDisplayLinkStop(frameDisplayLink) }
@@ -3205,11 +3295,13 @@ public final class SnoopySceneView: NSView {
             candidate.play()
         }
         pausedPlayers.removeAll()
-        if let frameDisplayLink {
-            // Measure the next frame interval from the first tick after resume.
-            frameSequenceLastHostTime = 0
-            CVDisplayLinkStart(frameDisplayLink)
+        if frameDisplayLink != nil {
+            // A fresh link: one created before the pause may never fire again
+            // if a display slept in the meantime.
+            recreateFrameDisplayLink()
         }
+        lastProgressAt = ProcessInfo.processInfo.systemUptime
+        stallRecoveryAttempted = false
         let deferred = deferredWhilePaused
         deferredWhilePaused.removeAll()
         deferred.forEach { $0() }

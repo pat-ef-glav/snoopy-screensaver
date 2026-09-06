@@ -70,6 +70,12 @@ final class WallpaperController: NSObject {
 
     // MARK: - Settings changes (called by the menu)
 
+    /// Tear every session down and start fresh (menu action and recovery hatch).
+    func restart() {
+        for window in windows.values { window.hide() }
+        applyPolicy()
+    }
+
     func setEnabled(_ enabled: Bool) {
         SnoopyPreferences.wallpaperEnabled = enabled
         applyPolicy()
