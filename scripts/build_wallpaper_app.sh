@@ -12,6 +12,8 @@
 #   SNOOPY_SKIP_BUILD=1  reuse an existing `swift build` product
 #   SNOOPY_APP_OUTPUT    bundle path (default .build/SnoopyWallpaper.app)
 #   SNOOPY_APP_VERSION   CFBundleShortVersionString/CFBundleVersion (default 1.0)
+#   SNOOPY_ICON_SOURCE   image for the app icon (default Resources/ScreenSaverPreview.png)
+#   SNOOPY_ICON_CROP     "centerX centerY side" square crop in source pixels
 set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -44,6 +46,8 @@ cat > "$OUT/Contents/Info.plist" <<PLIST
 	<string>Snoopy Wallpaper</string>
 	<key>CFBundleExecutable</key>
 	<string>SnoopyWallpaper</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.dingdangnao.snoopy.wallpaper</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -69,6 +73,18 @@ cat > "$OUT/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+
+# App icon from the shipped Snoopy artwork (override with SNOOPY_ICON_SOURCE=path,
+# and SNOOPY_ICON_CROP="centerX centerY side" in source pixels).
+ICON_SOURCE="${SNOOPY_ICON_SOURCE:-$ROOT/Resources/ScreenSaverPreview.png}"
+if [ -f "$ICON_SOURCE" ] && command -v iconutil >/dev/null 2>&1; then
+  # shellcheck disable=SC2086
+  if swift "$ROOT/Tools/MakeAppIcon.swift" "$ICON_SOURCE" "$OUT/Contents/Resources/AppIcon.icns" ${SNOOPY_ICON_CROP:-}; then
+    echo "Icon: $ICON_SOURCE"
+  else
+    echo "warning: app icon generation failed; the app keeps the generic icon" >&2
+  fi
+fi
 
 # Same resource layout as the .saver: index + halftone next to the media folder.
 cp "$ROOT/Resources/asset-index.json" "$ROOT/Resources/halftone_pattern.png" "$OUT/Contents/Resources/"

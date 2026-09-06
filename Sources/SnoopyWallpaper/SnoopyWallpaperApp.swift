@@ -1,17 +1,21 @@
 import AppKit
+import SwiftUI
 
-/// Menu-bar-only app. `LSUIElement` in the bundle's Info.plist hides the Dock
-/// icon; the activation policy is also set here so `swift run SnoopyWallpaper`
-/// from a checkout behaves the same.
+/// Menu-bar-only app. The status item opens a Klack-style panel
+/// (`MenuBarExtra` in its window style) whose content is `StatusPanelView`;
+/// the AppKit `WallpaperAppDelegate` owns the desktop windows and policy.
+/// `LSUIElement` in the bundle's Info.plist hides the Dock icon; the delegate
+/// also sets the accessory activation policy so `swift run` behaves the same.
 @main
-@MainActor
-enum SnoopyWallpaperApp {
-    static func main() {
-        let app = NSApplication.shared
-        let delegate = WallpaperAppDelegate()
-        app.delegate = delegate
-        app.setActivationPolicy(.accessory)
-        app.run()
-        withExtendedLifetime(delegate) {}
+struct SnoopyWallpaperApp: App {
+    @NSApplicationDelegateAdaptor(WallpaperAppDelegate.self) private var appDelegate
+
+    var body: some Scene {
+        MenuBarExtra {
+            StatusPanelView(model: appDelegate.model)
+        } label: {
+            Image(systemName: "dog.fill")
+        }
+        .menuBarExtraStyle(.window)
     }
 }

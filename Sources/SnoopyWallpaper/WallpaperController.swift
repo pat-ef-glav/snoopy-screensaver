@@ -70,6 +70,20 @@ final class WallpaperController: NSObject {
 
     // MARK: - Settings changes (called by the menu)
 
+    /// The scene on the main display (previews and scene info come from it).
+    var primaryScene: SnoopySceneView? {
+        if let main = NSScreen.main, let window = windows[main.displayID] { return window.scene }
+        return windows.values.first?.scene
+    }
+
+    func nextScene() {
+        for window in windows.values where window.state != .stopped { window.scene.skipToNextScene() }
+    }
+
+    func previousScene() {
+        for window in windows.values where window.state != .stopped { window.scene.skipToPreviousScene() }
+    }
+
     /// Tear every session down and start fresh (menu action and recovery hatch).
     func restart() {
         for window in windows.values { window.hide() }

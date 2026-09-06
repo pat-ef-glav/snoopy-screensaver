@@ -27,17 +27,20 @@ SNOOPY_INSTALL=1 sh scripts/build_wallpaper_app.sh   # also copies to /Applicati
 copying it (fine for a local build). If `.derived-media` exists (created by
 `scripts/build_and_install.sh`), the proxies are bundled too.
 
-## Menu
+## The panel
 
-| Item | What it does |
+Clicking the dog in the menu bar opens a card (a SwiftUI `MenuBarExtra` in its
+window style, like Klack or Little Snitch) that stays open while you use it:
+
+| Area | What it does |
 |---|---|
-| Show Snoopy on the Desktop | Master on/off. Off hides the windows; the system wallpaper shows. |
-| Restart Snoopy | Starts fresh sessions on every display (also a recovery hatch if playback ever stalls). |
-| Wallpaper Speed / Screen Saver Speed | 0.5× … 2×, one setting per host. Video players run at that rate and the HEIC frame clock is scaled. Scene budgets (~240 s per idle scene) and visitor schedules stay in wall time, as on tvOS. The screen saver's speed is also in its Options sheet. |
-| On Battery | *Keep playing*, *Pause*, or *Pause when battery is low* (< 20 %). Greyed out on desktops. |
+| Header | "Snoopy", the status line (Playing on 2 displays / Paused: on battery / Off) and the master switch. Off hides the windows; the system wallpaper shows. |
+| Scene | A thumbnail of the room currently on screen with its id, **Previous** / **Next Scene** (the next character segment is drawn in another room, swapped in like any segment change), a restart button, and "Up next, by chance": the three most likely next rooms with their share of the weighted draw under the current context. |
+| Speeds | Sliders for the wallpaper and the screen saver, 0.5× … 2× in quarter steps. Video players run at that rate and the HEIC frame clock is scaled; scene budgets and visitor schedules stay in wall time, as on tvOS. |
+| On Battery | *Keep playing*, *Pause*, or *Pause when battery is low* (< 20 %); hidden on desktops. |
 | Pause When Covered by Windows | Polls window coverage once a second (Aerial's algorithm: 50×50 grid, threshold 60 %) and pauses that display while it is mostly covered. |
-| Weather & Screen Saver Settings… | The screen saver's Options sheet: city / weather linking and the screen saver's speed. |
-| Launch at Login | Registers the app as a login item (needs the `.app` bundle). |
+| Weather | The cached snapshot (place · conditions · time) and the Options sheet (city / weather linking and the screen saver's speed). |
+| Footer | Launch at Login, version, Quit. |
 
 The wallpaper also pauses while the displays sleep and while the system screen
 saver runs, and restarts when a display is added or its geometry changes.
@@ -47,6 +50,14 @@ the HEIC frame clock stops, and pending scene changes and watchdogs wait, so the
 same clip continues on resume (the idle-scene budget is shifted by the paused
 time). The window stays on screen, so you keep seeing Snoopy rather than the
 system wallpaper. Only turning the wallpaper off hides the windows.
+
+## App icon
+
+`scripts/build_wallpaper_app.sh` renders `AppIcon.icns` from
+`Resources/ScreenSaverPreview.png` (Snoopy and Woodstock on the yellow field)
+with `Tools/MakeAppIcon.swift`, cropped into the standard macOS rounded-square
+grid. Use another picture with `SNOOPY_ICON_SOURCE=path` and adjust the square
+crop with `SNOOPY_ICON_CROP="centerX centerY side"`.
 
 ## Derived media (recommended)
 

@@ -198,6 +198,8 @@ public final class SnoopySceneView: NSView {
     public func start() {
         isStopping = false
         resetPauseState()
+        previousIdleSceneID = nil
+        forcedNextIdleSceneID = nil
         lastProgressAt = ProcessInfo.processInfo.systemUptime
         stallRecoveryAttempted = false
         seed = UInt64.random(in: UInt64.min...UInt64.max)
@@ -914,6 +916,7 @@ public final class SnoopySceneView: NSView {
     }
 
     private func clearIdleSceneState() {
+        if let current = sessionState.currentIdleSceneID { previousIdleSceneID = current }
         sessionState.currentIdleSceneID = nil
         sessionState.currentBasePoseID = nil
         idleSceneStartedAt = nil
@@ -1402,7 +1405,7 @@ public final class SnoopySceneView: NSView {
            let current = idleAssets.first(where: { $0.id == id }) {
             idle = current
         } else {
-            guard let selected = sessionChoice(from: idleAssets, pool: "idleScenes", context: context) else { return false }
+            guard let selected = chooseIdleScene(from: idleAssets, context: context) else { return false }
             idle = selected
             beginIdleScene(selected.id)
         }
@@ -2390,7 +2393,7 @@ public final class SnoopySceneView: NSView {
            let current = idleAssets.first(where: { $0.id == currentID }) {
             idle = current
         } else {
-            guard let selected = sessionChoice(from: idleAssets, pool: "idleScenes", context: context) else { return false }
+            guard let selected = chooseIdleScene(from: idleAssets, context: context) else { return false }
             idle = selected
             beginIdleScene(selected.id)
             currentPaletteAssetID = nil
@@ -3312,6 +3315,92 @@ public final class SnoopySceneView: NSView {
         isPaused = false
         pausedPlayers.removeAll()
         deferredWhilePaused.removeAll()
+    }
+
+    // MARK: - Scene navigation and previews (host UI)
+
+    private var previousIdleSceneID: String?
+    private var forcedNextIdleSceneID: String?
+
+    /// The idle scene ("room") currently on screen, if any.
+    public var currentIdleSceneID: String? { sessionState.currentIdleSceneID }
+
+    public var canSkipToPreviousScene: Bool { previousIdleSceneID != nil }
+
+    /// Leave the current room now: the next character segment is drawn in a
+    /// freshly selected idle scene, swapped in like any other segment change.
+    public func skipToNextScene() {
+        jumpToScene(nil, reason: "next scene requested")
+    }
+
+    /// Go back to the room shown before this one.
+    public func skipToPreviousScene() {
+        guard let previous = previousIdleSceneID else { return }
+        jumpToScene(previous, reason: "previous scene requested")
+    }
+
+    private func jumpToScene(_ forcedID: String?, reason: String) {
+        guard !isStopping, store != nil else { return }
+        forcedNextIdleSceneID = forcedID
+        clearIdleSceneState()
+        idleSceneChangeRequested = false
+        hasPlayedInitialActiveScene = true
+        pendingSceneStages.removeAll()
+        pendingIdleEntrySequence = nil
+        NSLog("SnoopyTVScreenSaver: %@", reason)
+        if isPlaying {
+            finishCurrentPlayback(reason)
+        } else if advanceWorkItem == nil {
+            scheduleNext(after: 0)
+        }
+    }
+
+    private func chooseIdleScene(from idleAssets: [AssetRecord], context: SelectionContext) -> AssetRecord? {
+        if let forcedID = forcedNextIdleSceneID {
+            forcedNextIdleSceneID = nil
+            if let forced = idleAssets.first(where: { $0.id == forcedID }) {
+                let limit = SelectionPolicy().recentLimit(for: "idleScenes", candidateCount: idleAssets.count)
+                memory.record(forced.id, in: "idleScenes", recentLimit: limit)
+                return forced
+            }
+        }
+        return sessionChoice(from: idleAssets, pool: "idleScenes", context: context)
+    }
+
+    public struct SceneCandidate: Identifiable {
+        public let id: String
+        public let thumbnailURL: URL?
+        /// Share of the weighted draw, 0…1.
+        public let chance: Double
+    }
+
+    /// The first background frame of an idle scene (nil for video-only rooms).
+    public func thumbnailURL(forIdleScene id: String) -> URL? {
+        guard let store, let asset = store.playableAssets().first(where: { $0.id == id }),
+              let directory = try? store.url(for: asset), let name = firstHEICName(in: asset) else { return nil }
+        return directory.appendingPathComponent(name)
+    }
+
+    /// The rooms that could come next under the current context, most likely
+    /// first, with the share of the weighted draw each would get. Recently
+    /// shown rooms are excluded the same way the session draw excludes them.
+    public func upcomingSceneCandidates(limit: Int = 4) -> [SceneCandidate] {
+        guard let store else { return [] }
+        let context = currentContext()
+        let idleAssets = store.eligible(store.playableAssets(), on: context.date).filter { $0.kind == "idleScene" }
+        let policy = SelectionPolicy()
+        var weighted = policy.weightedAssets(from: idleAssets, context: context, memory: memory, pool: "idleScenes")
+        let recentLimit = policy.recentLimit(for: "idleScenes", candidateCount: weighted.count)
+        let recent = Set(memory.recentIDs(in: "idleScenes", limit: recentLimit))
+        let fresh = weighted.filter { !recent.contains($0.asset.id) }
+        if !fresh.isEmpty { weighted = fresh }
+        weighted.removeAll { $0.asset.id == sessionState.currentIdleSceneID }
+        let total = weighted.reduce(0.0) { $0 + Double($1.weight) }
+        guard total > 0 else { return [] }
+        return weighted.sorted { $0.weight > $1.weight }.prefix(limit).map {
+            SceneCandidate(id: $0.asset.id, thumbnailURL: thumbnailURL(forIdleScene: $0.asset.id),
+                           chance: Double($0.weight) / total)
+        }
     }
 
     /// Drive `tick()` from an internal timer. A `ScreenSaverView` host calls
