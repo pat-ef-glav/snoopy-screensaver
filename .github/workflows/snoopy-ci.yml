@@ -1,0 +1,31 @@
+name: Snoopy CI
+
+on: [push, pull_request]
+
+jobs:
+  core:
+    name: SnoopyTVCore — swift build + test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: swift build -c release
+      - run: swift test
+
+  saver:
+    name: Screen saver — xcodebuild
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -version
+      # The 7.2 GB asset package is not in git; an empty folder keeps folder references valid.
+      - run: mkdir -p Resources/SnoopyAssets
+      # Mirrors scripts/build_and_install.sh (macOS 26 loads savers as arm64e), minus signing.
+      - run: >
+          xcodebuild -project SnoopyTVScreenSaver.xcodeproj
+          -scheme SnoopyTVScreenSaver -configuration Release
+          -derivedDataPath .build-xcode
+          -destination 'generic/platform=macOS'
+          ARCHS='arm64e x86_64' ONLY_ACTIVE_ARCH=NO
+          CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=""
+          build
