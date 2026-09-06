@@ -33,8 +33,8 @@ final class SnoopySaverView: ScreenSaverView {
     }
 
     override func startAnimation() {
-        // Shared with the wallpaper app (SnoopyPreferences suite); 1 = authored speed.
-        scene.playbackRate = SnoopyPreferences.playbackRate
+        // Set in the Options sheet or the Snoopy Wallpaper menu; 1 = authored speed.
+        scene.playbackRate = SnoopyPreferences.playbackRate(for: .screenSaver)
         super.startAnimation()
         scene.start()
     }

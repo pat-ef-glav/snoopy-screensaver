@@ -8,10 +8,10 @@ public enum SnoopyWeatherError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidCity: return "请填写至少两个字符的城市名称。"
-        case .locationNotFound: return "没有找到这个所在地，请尝试填写“城市, 国家/地区”。"
-        case .invalidResponse: return "天气服务返回了无法识别的数据。"
-        case .service(let message): return "天气服务暂时不可用：\(message)"
+        case .invalidCity: return "Enter a city name of at least two characters."
+        case .locationNotFound: return "That place was not found. Try \"City, Country\"."
+        case .invalidResponse: return "The weather service returned data that could not be read."
+        case .service(let message): return "The weather service is temporarily unavailable: \(message)"
         }
     }
 }
@@ -45,7 +45,7 @@ public enum SnoopyWeatherConditionMapper {
 public struct SnoopyWeatherClient: Sendable {
     public init() {}
 
-    public func resolve(city rawCity: String, language: String = "zh") async throws -> SnoopyWeatherLocation {
+    public func resolve(city rawCity: String, language: String = "en") async throws -> SnoopyWeatherLocation {
         let city = rawCity.trimmingCharacters(in: .whitespacesAndNewlines)
         guard city.count >= 2 else { throw SnoopyWeatherError.invalidCity }
         var components = URLComponents(string: "https://geocoding-api.open-meteo.com/v1/search")!

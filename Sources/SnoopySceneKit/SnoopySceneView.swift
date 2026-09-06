@@ -193,6 +193,7 @@ public final class SnoopySceneView: NSView {
 
     public func start() {
         isStopping = false
+        resetPauseState()
         seed = UInt64.random(in: UInt64.min...UInt64.max)
         sessionState = PlaybackSessionState()
         pendingBasePoseID = nil
@@ -219,6 +220,7 @@ public final class SnoopySceneView: NSView {
 
     public func stop() {
         isStopping = true
+        resetPauseState()
         startupFadeView?.removeFromSuperview()
         startupFadeView = nil
         startupFadeHasBegun = false
@@ -234,7 +236,7 @@ public final class SnoopySceneView: NSView {
     }
 
     public func tick() {
-        if !isStopping, !isPlaying, advanceWorkItem == nil {
+        if !isStopping, !isPaused, !isPlaying, advanceWorkItem == nil {
             scheduleNext(after: 0.05)
         }
     }
@@ -250,7 +252,7 @@ public final class SnoopySceneView: NSView {
         }
         let path = defaultIndexURL()?.path ?? compatibleConfiguredPath
         guard let path else {
-            NSLog("SnoopyTVScreenSaver: 未找到 asset-index.json")
+            NSLog("SnoopyTVScreenSaver: asset-index.json not found")
             return
         }
         do {
@@ -298,6 +300,11 @@ public final class SnoopySceneView: NSView {
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.advanceWorkItem = nil
+            if self.isPaused {
+                // Advance as soon as the host resumes instead of while frozen.
+                self.deferredWhilePaused.append { [weak self] in self?.scheduleNext(after: 0) }
+                return
+            }
             self.playNext()
         }
         advanceWorkItem = work
@@ -636,7 +643,17 @@ public final class SnoopySceneView: NSView {
         watchdogWorkItem?.cancel()
         let testSeconds = ProcessInfo.processInfo.environment["SNOOPY_TEST_SEGMENT_SECONDS"].flatMap(Double.init)
         let seconds = max(0.5, testSeconds ?? defaultSeconds)
-        let work = DispatchWorkItem { [weak self] in self?.finishCurrentPlayback("watchdog") }
+        let installedAt = ProcessInfo.processInfo.systemUptime
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if self.isPaused {
+                // Re-arm after resume with the time that was left when we paused.
+                let remaining = max(0.5, seconds - (self.pauseStartedAt - installedAt))
+                self.deferredWhilePaused.append { [weak self] in self?.installWatchdog(defaultSeconds: remaining) }
+                return
+            }
+            self.finishCurrentPlayback("watchdog")
+        }
         watchdogWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
     }
@@ -648,8 +665,17 @@ public final class SnoopySceneView: NSView {
         watchdogWorkItem?.cancel()
         let testSeconds = ProcessInfo.processInfo.environment["SNOOPY_TEST_SEGMENT_SECONDS"].flatMap(Double.init)
         let seconds = max(0.5, testSeconds ?? defaultSeconds)
+        let installedAt = ProcessInfo.processInfo.systemUptime
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.transitionPlaybackGeneration == generation else { return }
+            if self.isPaused {
+                let remaining = max(0.5, seconds - (self.pauseStartedAt - installedAt))
+                self.deferredWhilePaused.append { [weak self] in
+                    self?.installTransitionWatchdog(defaultSeconds: remaining, generation: generation,
+                                                    stage: stage, selection: selection)
+                }
+                return
+            }
             self.completeSceneTransitionStage(stage, selection: selection, reason: "watchdog")
         }
         watchdogWorkItem = work
@@ -1698,6 +1724,10 @@ public final class SnoopySceneView: NSView {
         let timeout = DispatchWorkItem { [weak self] in
             guard let self, !didStart, self.isPlaying,
                   self.transitionPlaybackGeneration == generation else { return }
+            if self.isPaused {
+                self.deferredWhilePaused.append { [weak self] in self?.transitionPrerollTimeout?.perform() }
+                return
+            }
             NSLog("SnoopyTVScreenSaver: transition preroll timeout stage=%@", stage.rawValue)
             retryPreparation("drawable/preroll timeout")
         }
@@ -2056,6 +2086,10 @@ public final class SnoopySceneView: NSView {
         let timeout = DispatchWorkItem { [weak self] in
             guard let self, !didStart, self.isPlaying,
                   self.compositePlaybackGeneration == generation else { return }
+            if self.isPaused {
+                self.deferredWhilePaused.append { [weak self] in self?.compositePrerollTimeout?.perform() }
+                return
+            }
             NSLog("SnoopyTVScreenSaver: composite preroll timeout %@", assetID)
             abandonIncoming("drawable/preroll timeout")
         }
@@ -3119,17 +3153,73 @@ public final class SnoopySceneView: NSView {
         }
     }
 
-    private func applyPlaybackRateToActivePlayers() {
-        let rate = Float(playbackRate)
+    private var allPlayers: [AVPlayer] {
         var players: [AVPlayer] = transitionPlayers + retiringTransitionPlayers
         if let player { players.append(player) }
         if let retiringCompositePlayer { players.append(retiringCompositePlayer) }
         if let visitorPlayer { players.append(visitorPlayer) }
         if let backgroundVideoPlayer { players.append(backgroundVideoPlayer) }
-        for candidate in players {
+        return players
+    }
+
+    private func applyPlaybackRateToActivePlayers() {
+        let rate = Float(playbackRate)
+        for candidate in allPlayers {
             candidate.defaultRate = rate
             if candidate.rate != 0 { candidate.rate = rate }
         }
+    }
+
+    // MARK: - Pause / resume (host-driven)
+
+    /// True while the host has frozen playback with `pause()`.
+    public private(set) var isPaused = false
+    private var pauseStartedAt: TimeInterval = 0
+    private var pausedPlayers: [AVPlayer] = []
+    private var deferredWhilePaused: [() -> Void] = []
+
+    /// Freeze playback on the current frame: video players pause where they
+    /// are, the HEIC frame clock stops, and pending advances, watchdogs and
+    /// preroll timeouts are held until `resume()`. Nothing is torn down, so
+    /// the same clip continues afterwards. The idle-scene budget and visitor
+    /// schedule are shifted by the paused duration on resume.
+    public func pause() {
+        guard !isPaused, !isStopping else { return }
+        isPaused = true
+        pauseStartedAt = ProcessInfo.processInfo.systemUptime
+        pausedPlayers = allPlayers.filter { $0.rate != 0 }
+        pausedPlayers.forEach { $0.pause() }
+        if let frameDisplayLink { CVDisplayLinkStop(frameDisplayLink) }
+        NSLog("SnoopyTVScreenSaver: paused (%ld players, %@)", pausedPlayers.count, currentAssetID ?? "idle")
+    }
+
+    /// Continue exactly where `pause()` froze playback.
+    public func resume() {
+        guard isPaused else { return }
+        isPaused = false
+        let pausedFor = ProcessInfo.processInfo.systemUptime - pauseStartedAt
+        if let startedAt = idleSceneStartedAt { idleSceneStartedAt = startedAt + pausedFor }
+        let rate = Float(playbackRate)
+        for candidate in pausedPlayers {
+            candidate.defaultRate = rate
+            candidate.play()
+        }
+        pausedPlayers.removeAll()
+        if let frameDisplayLink {
+            // Measure the next frame interval from the first tick after resume.
+            frameSequenceLastHostTime = 0
+            CVDisplayLinkStart(frameDisplayLink)
+        }
+        let deferred = deferredWhilePaused
+        deferredWhilePaused.removeAll()
+        deferred.forEach { $0() }
+        NSLog("SnoopyTVScreenSaver: resumed after %.1fs (%ld deferred)", pausedFor, deferred.count)
+    }
+
+    private func resetPauseState() {
+        isPaused = false
+        pausedPlayers.removeAll()
+        deferredWhilePaused.removeAll()
     }
 
     /// Drive `tick()` from an internal timer. A `ScreenSaverView` host calls

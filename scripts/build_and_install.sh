@@ -17,7 +17,7 @@ if ! xcodebuild -version >/dev/null 2>&1; then
   if [ -d /Applications/Xcode.app/Contents/Developer ]; then
     export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
   else
-    echo "需要完整 Xcode；当前 xcode-select 不是 Xcode。" >&2
+    echo "Full Xcode is required; the current xcode-select path is not Xcode." >&2
     exit 2
   fi
 fi
@@ -36,7 +36,7 @@ xcodebuild \
 
 PRODUCT="$DERIVED/Build/Products/Release/SNOOPY.saver"
 if [ ! -d "$PRODUCT" ]; then
-  echo "构建完成但没有找到：$PRODUCT" >&2
+  echo "Build finished but the product was not found: $PRODUCT" >&2
   find "$DERIVED/Build/Products" -maxdepth 3 -name '*.saver' -print >&2 || true
   exit 3
 fi
@@ -46,7 +46,7 @@ pkill -x legacyScreenSaver 2>/dev/null || true
 pkill -x WallpaperLegacyExtension 2>/dev/null || true
 pkill -x WallpaperAgent 2>/dev/null || true
 
-# System Settings may rename an in-use replacement to “_副本” and keep the
+# System Settings may rename an in-use replacement (" copy" / "_副本") and keep the
 # previous bundle loaded from Trash. Unregister and remove every duplicate of
 # this saver before installing one canonical, signed bundle.
 find "$DEST" -maxdepth 1 -type d \( -name 'SNOOPY*.saver' -o -name 'Snoopy TV*.saver' \) \
@@ -78,4 +78,4 @@ pkill -x WallpaperAgent 2>/dev/null || true
 CACHE_ROOT="$(dirname "${TMPDIR%/}")/C/com.apple.wallpaper.extension.legacy/com.apple.wallpaper.legacy.thumbnails"
 rm -f "$CACHE_ROOT/60267a63a5c4ec8b424ed1dd8f6742bd0c348613e92822888e50ca3d001980fb.png"
 
-echo "已安装：$DEST/SNOOPY.saver"
+echo "Installed: $DEST/SNOOPY.saver"

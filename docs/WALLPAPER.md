@@ -32,17 +32,20 @@ copying it (fine for a local build). If `.derived-media` exists (created by
 | Item | What it does |
 |---|---|
 | Show Snoopy on the Desktop | Master on/off. Off hides the windows; the system wallpaper shows. |
-| Playback Speed | 0.5× … 2×. Video players run at that rate and the HEIC frame clock is scaled. Scene budgets (~240 s per idle scene) and visitor schedules stay in wall time, as on tvOS. Shared with the screen saver. |
+| Wallpaper Speed / Screen Saver Speed | 0.5× … 2×, one setting per host. Video players run at that rate and the HEIC frame clock is scaled. Scene budgets (~240 s per idle scene) and visitor schedules stay in wall time, as on tvOS. The screen saver's speed is also in its Options sheet. |
 | On Battery | *Keep playing*, *Pause*, or *Pause when battery is low* (< 20 %). Greyed out on desktops. |
 | Pause When Covered by Windows | Polls window coverage once a second (Aerial's algorithm: 50×50 grid, threshold 60 %) and pauses that display while it is mostly covered. |
-| Weather Settings… | The same city / weather-linking panel as the screen saver's Options. |
+| Weather & Screen Saver Settings… | The screen saver's Options sheet: city / weather linking and the screen saver's speed. |
 | Launch at Login | Registers the app as a login item (needs the `.app` bundle). |
 
 The wallpaper also pauses while the displays sleep and while the system screen
 saver runs, and restarts when a display is added or its geometry changes.
 
-Pausing stops playback and hides that display's window; resuming starts a fresh
-session (new seed), like the screen saver does on each activation.
+Pausing freezes the current frame in place: video players pause where they are,
+the HEIC frame clock stops, and pending scene changes and watchdogs wait, so the
+same clip continues on resume (the idle-scene budget is shifted by the paused
+time). The window stays on screen, so you keep seeing Snoopy rather than the
+system wallpaper. Only turning the wallpaper off hides the windows.
 
 ## Settings storage
 
@@ -52,7 +55,7 @@ Everything lives in the shared suite `com.dingdangnao.snoopy.shared`
 | Key | Values |
 |---|---|
 | `SnoopyWallpaperEnabled` | bool, default true |
-| `SnoopyPlaybackRate` | 0.25 … 4, default 1 |
+| `SnoopyPlaybackRate.wallpaper` / `SnoopyPlaybackRate.screenSaver` | 0.25 … 4, default 1 (the legacy `SnoopyPlaybackRate` is the fallback for both) |
 | `SnoopyOnBatteryMode` | 0 keep playing · 1 pause · 2 pause when low |
 | `SnoopyPauseWhenHidden` | bool, default true |
 | `SnoopyWallpaperLevelOffset` | int, default 0 — offset from `CGWindowLevelForKey(.desktopWindow)`; try `-1` (Aerial's choice) if the wallpaper ever appears above your desktop icons |
@@ -76,7 +79,7 @@ This is the recipe Aerial's desktop mode and other wallpaper apps use.
    ```
 
    The compositor logs with the `SnoopyTVScreenSaver:` prefix (asset index found, derived
-   proxies, HEIC display link, scene changes). "未找到 asset-index.json" means the bundle has
+   proxies, HEIC display link, scene changes). "asset-index.json not found" means the bundle has
    no index — rebuild after placing `Resources/SnoopyAssets`.
 3. Black windows but no errors: the assets folder is missing or empty in the bundle
    (`ls .build/SnoopyWallpaper.app/Contents/Resources/SnoopyAssets | head`).

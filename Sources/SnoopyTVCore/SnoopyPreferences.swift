@@ -62,14 +62,28 @@ public enum SnoopyPreferences {
     public static let pauseWhenHiddenKey = "SnoopyPauseWhenHidden"
     public static let wallpaperEnabledKey = "SnoopyWallpaperEnabled"
 
-    /// Playback speed multiplier (1 = authored speed). Applied to video rate and
-    /// the HEIC frame clock by SnoopySceneView; scene budgets stay in wall time.
-    public static var playbackRate: Double {
-        get {
-            let value = defaults.double(forKey: playbackRateKey)
-            return value > 0 ? min(max(value, 0.25), 4.0) : 1.0
-        }
-        set { defaults.set(newValue, forKey: playbackRateKey) }
+    /// Playback speed multiplier (1 = authored speed) for one host. Applied to
+    /// video rate and the HEIC frame clock by SnoopySceneView; scene budgets
+    /// stay in wall time. The legacy shared key is the fallback for both hosts.
+    public static func playbackRate(for host: SnoopyPlaybackHost) -> Double {
+        let own = defaults.double(forKey: host.playbackRateKey)
+        let chosen = own > 0 ? own : defaults.double(forKey: playbackRateKey)
+        return chosen > 0 ? clampPlaybackRate(chosen) : 1.0
+    }
+
+    public static func setPlaybackRate(_ rate: Double, for host: SnoopyPlaybackHost) {
+        defaults.set(clampPlaybackRate(rate), forKey: host.playbackRateKey)
+    }
+
+    public static func clampPlaybackRate(_ rate: Double) -> Double {
+        min(max(rate, 0.25), 4.0)
+    }
+
+    /// The speeds offered by the menus and the Options sheet.
+    public static let playbackRateChoices: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+
+    public static func playbackRateTitle(_ rate: Double) -> String {
+        rate == rate.rounded() ? "\(Int(rate))×" : "\(rate)×"
     }
 
     public static var onBatteryMode: SnoopyOnBatteryMode {
@@ -120,6 +134,21 @@ public enum SnoopyPreferences {
             defaults.set(data, forKey: weatherLocationKey)
         }
         defaults.set(weatherLocation.name, forKey: cityNameKey)
+    }
+}
+
+/// The two hosts of SnoopySceneView; each keeps its own playback speed.
+public enum SnoopyPlaybackHost: String, CaseIterable, Sendable {
+    case wallpaper
+    case screenSaver
+
+    public var playbackRateKey: String { "SnoopyPlaybackRate.\(rawValue)" }
+
+    public var title: String {
+        switch self {
+        case .wallpaper: return "Wallpaper"
+        case .screenSaver: return "Screen Saver"
+        }
     }
 }
 

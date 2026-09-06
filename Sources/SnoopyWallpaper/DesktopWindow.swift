@@ -7,9 +7,11 @@ import SnoopyTVCore
 /// joins every Space, never becomes key, ignores the mouse, and sits below the
 /// desktop icons.
 final class DesktopWindow: NSWindow {
+    enum PlaybackState { case stopped, playing, paused }
+
     let scene: SnoopySceneView
     let displayID: CGDirectDisplayID
-    private(set) var isPlaying = false
+    private(set) var state: PlaybackState = .stopped
 
     /// Offset from `CGWindowLevelForKey(.desktopWindow)`. 0 places the window at
     /// desktop level, above the system wallpaper and below the desktop icons
@@ -52,27 +54,45 @@ final class DesktopWindow: NSWindow {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    /// Start (or restart) playback and show the window.
+    /// Show the window and play: continue a paused session, or start a new one.
     func play() {
-        guard !isPlaying else { return }
-        isPlaying = true
-        scene.playbackRate = SnoopyPreferences.playbackRate
-        scene.start()
-        scene.startClock()
-        orderFrontRegardless()
+        switch state {
+        case .playing:
+            return
+        case .paused:
+            state = .playing
+            applyPlaybackRate()
+            scene.resume()
+            scene.startClock()
+        case .stopped:
+            state = .playing
+            applyPlaybackRate()
+            scene.start()
+            scene.startClock()
+            orderFrontRegardless()
+        }
+    }
+
+    /// Freeze on the current frame. The window stays where it is, so the
+    /// desktop keeps showing Snoopy instead of the system wallpaper.
+    func pause() {
+        guard state == .playing else { return }
+        state = .paused
+        scene.stopClock()
+        scene.pause()
     }
 
     /// Stop playback and hide the window so the system wallpaper shows through.
-    func pause() {
-        guard isPlaying else { return }
-        isPlaying = false
+    func hide() {
+        guard state != .stopped else { return }
+        state = .stopped
         scene.stopClock()
         scene.stop()
         orderOut(nil)
     }
 
     func applyPlaybackRate() {
-        scene.playbackRate = SnoopyPreferences.playbackRate
+        scene.playbackRate = SnoopyPreferences.playbackRate(for: .wallpaper)
     }
 }
 

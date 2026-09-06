@@ -19,7 +19,7 @@ final class WallpaperController: NSObject {
     var statusDescription: String {
         guard SnoopyPreferences.wallpaperEnabled else { return "Off" }
         if let reason = globalPauseReason { return "Paused: \(reason)" }
-        let playing = windows.values.filter(\.isPlaying).count
+        let playing = windows.values.filter { $0.state == .playing }.count
         let total = windows.count
         if total == 0 { return "No displays" }
         if playing == total { return total == 1 ? "Playing" : "Playing on \(total) displays" }
@@ -59,7 +59,7 @@ final class WallpaperController: NSObject {
     }
 
     func shutdown() {
-        for window in windows.values { window.pause() }
+        for window in windows.values { window.hide() }
         for monitor in occlusionMonitors.values { monitor.stop() }
         occlusionMonitors.removeAll()
         power.stop()
@@ -75,9 +75,11 @@ final class WallpaperController: NSObject {
         applyPolicy()
     }
 
-    func setPlaybackRate(_ rate: Double) {
-        SnoopyPreferences.playbackRate = rate
-        for window in windows.values { window.applyPlaybackRate() }
+    func setPlaybackRate(_ rate: Double, for host: SnoopyPlaybackHost) {
+        SnoopyPreferences.setPlaybackRate(rate, for: host)
+        if host == .wallpaper {
+            for window in windows.values { window.applyPlaybackRate() }
+        }
     }
 
     func setOnBatteryMode(_ mode: SnoopyOnBatteryMode) {
@@ -113,12 +115,20 @@ final class WallpaperController: NSObject {
     }
 
     private func applyPolicy() {
+        let enabled = SnoopyPreferences.wallpaperEnabled
         for (displayID, window) in windows {
-            let play = shouldPlay(on: displayID)
-            guard play != window.isPlaying else { continue }
-            if play { window.play() } else { window.pause() }
-            // Let the window animate in/out before trusting coverage again.
-            occlusionMonitors[displayID]?.cooldown(seconds: 1.5)
+            let before = window.state
+            if !enabled {
+                window.hide()                       // off: the system wallpaper shows
+            } else if shouldPlay(on: displayID) {
+                window.play()                       // start, or continue a paused session
+            } else if window.state == .playing {
+                window.pause()                      // freeze on the current frame, stay visible
+            }
+            if window.state != before {
+                // Let the window settle before trusting coverage again.
+                occlusionMonitors[displayID]?.cooldown(seconds: 1.5)
+            }
         }
         let wantOcclusionPolling = SnoopyPreferences.wallpaperEnabled && SnoopyPreferences.pauseWhenHidden
         for monitor in occlusionMonitors.values {
@@ -132,7 +142,7 @@ final class WallpaperController: NSObject {
 
         // Tear down windows whose display went away.
         for (displayID, window) in windows where !currentIDs.contains(displayID) {
-            window.pause()
+            window.hide()
             window.close()
             windows[displayID] = nil
             occlusionMonitors[displayID]?.stop()

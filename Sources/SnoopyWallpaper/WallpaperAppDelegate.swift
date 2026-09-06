@@ -13,8 +13,6 @@ final class WallpaperAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
     private let menu = NSMenu()
     private lazy var weatherController = SnoopyConfigurationController()
 
-    private static let speeds: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
-
     func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
@@ -52,17 +50,8 @@ final class WallpaperAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
         toggle.state = SnoopyPreferences.wallpaperEnabled ? .on : .off
         menu.addItem(toggle)
 
-        let speed = NSMenuItem(title: "Playback Speed", action: nil, keyEquivalent: "")
-        let speedMenu = NSMenu()
-        for rate in Self.speeds {
-            let item = NSMenuItem(title: Self.title(forRate: rate), action: #selector(selectSpeed(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = rate
-            item.state = abs(SnoopyPreferences.playbackRate - rate) < 0.001 ? .on : .off
-            speedMenu.addItem(item)
-        }
-        speed.submenu = speedMenu
-        menu.addItem(speed)
+        menu.addItem(speedMenuItem(for: .wallpaper, title: "Wallpaper Speed", action: #selector(selectWallpaperSpeed(_:))))
+        menu.addItem(speedMenuItem(for: .screenSaver, title: "Screen Saver Speed", action: #selector(selectScreenSaverSpeed(_:))))
 
         let battery = NSMenuItem(title: "On Battery", action: nil, keyEquivalent: "")
         let batteryMenu = NSMenu()
@@ -83,7 +72,7 @@ final class WallpaperAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
         menu.addItem(hidden)
         menu.addItem(.separator())
 
-        let weather = NSMenuItem(title: "Weather Settings…", action: #selector(showWeatherSettings(_:)), keyEquivalent: "")
+        let weather = NSMenuItem(title: "Weather & Screen Saver Settings…", action: #selector(showWeatherSettings(_:)), keyEquivalent: "")
         weather.target = self
         menu.addItem(weather)
 
@@ -97,8 +86,19 @@ final class WallpaperAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
         menu.addItem(NSMenuItem(title: "Quit Snoopy Wallpaper", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
-    private static func title(forRate rate: Double) -> String {
-        rate == rate.rounded() ? "\(Int(rate))×" : "\(rate)×"
+    private func speedMenuItem(for host: SnoopyPlaybackHost, title: String, action: Selector) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        let current = SnoopyPreferences.playbackRate(for: host)
+        for rate in SnoopyPreferences.playbackRateChoices {
+            let choice = NSMenuItem(title: SnoopyPreferences.playbackRateTitle(rate), action: action, keyEquivalent: "")
+            choice.target = self
+            choice.representedObject = rate
+            choice.state = abs(current - rate) < 0.001 ? .on : .off
+            submenu.addItem(choice)
+        }
+        item.submenu = submenu
+        return item
     }
 
     // MARK: - Actions
@@ -107,9 +107,14 @@ final class WallpaperAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
         controller.setEnabled(!SnoopyPreferences.wallpaperEnabled)
     }
 
-    @objc private func selectSpeed(_ sender: NSMenuItem) {
+    @objc private func selectWallpaperSpeed(_ sender: NSMenuItem) {
         guard let rate = sender.representedObject as? Double else { return }
-        controller.setPlaybackRate(rate)
+        controller.setPlaybackRate(rate, for: .wallpaper)
+    }
+
+    @objc private func selectScreenSaverSpeed(_ sender: NSMenuItem) {
+        guard let rate = sender.representedObject as? Double else { return }
+        controller.setPlaybackRate(rate, for: .screenSaver)
     }
 
     @objc private func selectBatteryMode(_ sender: NSMenuItem) {
