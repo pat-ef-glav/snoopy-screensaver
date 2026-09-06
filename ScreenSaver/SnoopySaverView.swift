@@ -2840,7 +2840,7 @@ final class SnoopySceneView: NSView {
         let context = Unmanaged.passUnretained(self).toOpaque()
         CVDisplayLinkSetOutputCallback(link, { _, _, outputTime, _, _, context in
             guard let context else { return kCVReturnError }
-            let view = Unmanaged<SnoopySaverView>.fromOpaque(context).takeUnretainedValue()
+            let view = Unmanaged<SnoopySceneView>.fromOpaque(context).takeUnretainedValue()
             let hostTime = outputTime.pointee.hostTime
             DispatchQueue.main.async { [weak view] in view?.advanceFrameSequence(hostTime: hostTime) }
             return kCVReturnSuccess
