@@ -3136,9 +3136,13 @@ public final class SnoopySceneView: NSView {
     /// `tick()` from `animateOneFrame` instead and must not start this clock.
     public func startClock(interval: TimeInterval = 1.0 / 30.0) {
         stopClock()
-        hostClock = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             self?.tick()
         }
+        // Common modes so the clock keeps running while a menu is open or a
+        // window is being dragged (the default mode pauses timers then).
+        RunLoop.main.add(timer, forMode: .common)
+        hostClock = timer
     }
 
     public func stopClock() {
