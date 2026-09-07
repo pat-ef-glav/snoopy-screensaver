@@ -84,6 +84,26 @@ final class WallpaperController: NSObject {
         for window in windows.values where window.state != .stopped { window.scene.skipToPreviousScene() }
     }
 
+    /// Fire a reaction trigger (a `ReactionTrigger` token such as "doorbell")
+    /// on every display, the same fan-out as `nextScene()`: each scene
+    /// consumes it at its next character boundary while it is still fresh.
+    /// A paused display keeps it — the scene's pause bookkeeping stops the
+    /// freshness clock — so it reacts once it resumes.
+    func react(_ trigger: String) {
+        for window in windows.values where window.state != .stopped { window.scene.triggerReaction(trigger) }
+    }
+
+    /// The triggers the loaded index can answer, read from the main display's
+    /// scene (empty on a V1-only index, or before the index has loaded).
+    var availableReactionTriggers: [String] {
+        primaryScene?.availableReactionTriggers ?? []
+    }
+
+    /// The trigger the main display is waiting to consume, if any.
+    var pendingReactionTrigger: String? {
+        primaryScene?.pendingReactionTriggerName
+    }
+
     /// Tear every session down and start fresh (menu action and recovery hatch).
     func restart() {
         for window in windows.values { window.hide() }

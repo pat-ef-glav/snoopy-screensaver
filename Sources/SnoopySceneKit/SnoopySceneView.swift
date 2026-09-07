@@ -144,6 +144,46 @@ public final class SnoopySceneView: NSView {
     private var startupFadeHasBegun = false
     private var weatherRefreshTask: Task<Void, Never>?
 
+    // MARK: - Reactions (docs/REACTION_POSES.md §5)
+
+    /// A fired reaction trigger, like tvOS's `reactionTriggerEvent`. Equality
+    /// includes `firedAt`, so firing the same token twice makes two events
+    /// (a doorbell can ring twice) while one event is never replayed.
+    private struct ReactionTriggerEvent: Equatable {
+        let trigger: String
+        var firedAt: TimeInterval
+        /// "host" | "env" | "interval" (log only).
+        let source: String
+    }
+    private var pendingReactionTrigger: ReactionTriggerEvent?
+    private var lastHandledReactionTrigger: ReactionTriggerEvent?
+    /// tvOS `defaultReactionTriggerTimeout`.
+    private static let reactionTriggerTimeout: TimeInterval = 30
+    /// `SNOOPY_REACTION_TRIGGER`: fired once, at the first character boundary
+    /// of an idle scene after one animation has played there.
+    private var startupReactionTrigger: String?
+    /// `SNOOPY_REACTION_INTERVAL_SECONDS`.
+    private var reactionIntervalTimer: Timer?
+
+    /// The character holds in a reaction pose (RPH) instead of resting in a
+    /// base pose: the scene transition that consumes it starts from that node
+    /// and skips `idleExitSequence`.
+    private struct ParkedCharacter {
+        let style: String
+        /// The BP an exit returns to when no scene transition consumes the park.
+        let returnPoseID: String
+        /// Parked because the idle scene is due to rotate.
+        let forRotation: Bool
+    }
+    private var parkedCharacter: ParkedCharacter?
+    /// Set by the hold-boundary observer right before `finishCurrentPlayback`
+    /// and consumed by `cleanCurrentPlayback`: the composite player is moved
+    /// to `retiringCompositePlayer` without `pause()`, so the hold keeps
+    /// animating while the next stage prerolls.
+    private var retiringSurfaceKeepsPlaying = false
+    /// Hold repeats cover the transition preroll timeout (4 s) plus one retry.
+    private static let reactionHoldSeconds: TimeInterval = 8.5
+
     public override init(frame: NSRect) {
         super.init(frame: frame)
         configureView()
@@ -152,6 +192,13 @@ public final class SnoopySceneView: NSView {
     public required init?(coder: NSCoder) {
         super.init(coder: coder)
         configureView()
+    }
+
+    deinit {
+        // A host that releases the view without stop() must not leave a
+        // repeating timer on the main run loop for the life of the process.
+        reactionIntervalTimer?.invalidate()
+        hostClock?.invalidate()
     }
 
     private func configureView() {
@@ -218,7 +265,12 @@ public final class SnoopySceneView: NSView {
         nextVisitorScheduleIndex = 0
         idleSceneChangeRequested = false
         hasPlayedInitialActiveScene = false
+        pendingReactionTrigger = nil
+        lastHandledReactionTrigger = nil
+        parkedCharacter = nil
+        retiringSurfaceKeepsPlaying = false
         installStartupFade()
+        configureReactionEnvironment()
         // Start identically in Preview and full-screen mode. The first media
         // tree installs synchronously and its decoded first-frame placeholder
         // remains visible during AVPlayer preroll; no poster/cover interstitial.
@@ -234,8 +286,16 @@ public final class SnoopySceneView: NSView {
         startupFadeHasBegun = false
         weatherRefreshTask?.cancel()
         weatherRefreshTask = nil
+        reactionIntervalTimer?.invalidate()
+        reactionIntervalTimer = nil
+        // Nothing may report a stale trigger or park to a host after stop().
+        startupReactionTrigger = nil
+        pendingReactionTrigger = nil
+        lastHandledReactionTrigger = nil
+        parkedCharacter = nil
         cancelPendingAdvance()
         cleanCurrentPlayback()
+        NSLog("SnoopyTVScreenSaver: stopped")
     }
 
     public override func draw(_ rect: NSRect) {
@@ -314,6 +374,13 @@ public final class SnoopySceneView: NSView {
     }
 
     private func defaultIndexURL() -> URL? {
+        // Development only: play from another index (for example the V1-only
+        // index at HEAD) without swapping the bundled file. Media resolves as
+        // usual, from a `SnoopyAssets` folder next to that index.
+        if let override = ProcessInfo.processInfo.environment["SNOOPY_ASSET_INDEX_PATH"],
+           FileManager.default.fileExists(atPath: override) {
+            return URL(fileURLWithPath: override)
+        }
         let bundleIndex = Bundle(for: Self.self).url(forResource: "asset-index", withExtension: "json")
         let sourceIndex = Self.sourceTreeRoot
             .appendingPathComponent("Resources/asset-index.json")
@@ -430,7 +497,10 @@ public final class SnoopySceneView: NSView {
             transitionHostView?.removeFromSuperview()
             transitionHostView = nil
         }
-        player?.pause()
+        // A reaction hold that reached its logical end keeps animating on the
+        // retiring surface until the reveal tree replaces it (see the
+        // hold-boundary observer in startVideoComposition).
+        if !(preservingIdleComposite && retiringSurfaceKeepsPlaying) { player?.pause() }
         if let observer = playerBoundaryObserver { player?.removeTimeObserver(observer) }
         playerBoundaryObserver = nil
         if !preservingActiveVideo {
@@ -447,6 +517,7 @@ public final class SnoopySceneView: NSView {
             holdingActiveFrameForIdleEntry = false
         }
         if preservingIdleComposite {
+            retiringSurfaceKeepsPlaying = false
             // A failed incoming candidate may already have been discarded.
             // In that case the retiring surface is the only visible foreground
             // and must survive the retry instead of being collected here.
@@ -462,6 +533,12 @@ public final class SnoopySceneView: NSView {
             compositeVideoHostView = nil
             frameView = nil
         } else {
+            retiringSurfaceKeepsPlaying = false
+            // No idle composite surface survives this branch (the retiring
+            // one included), so a character parked on it goes with it: a
+            // reveal abandoned by the watchdog or an item failure must not
+            // leave the park forcing another rotation before the idle entry.
+            parkedCharacter = nil
             retirePreviousCompositeSurface()
             teardownPlayerLayer(compositeVideoLayer)
             compositeVideoLayer = nil
@@ -825,16 +902,7 @@ public final class SnoopySceneView: NSView {
                 started = startActiveVideo(asset, from: store, context: context)
             case .activeSceneWithReveal(let asset, let selection):
                 kind = .video
-                if startActiveVideo(asset, from: store, context: context) {
-                    // The outgoing RPH/Idle surface remains above this movie
-                    // while Reveal is prepared. Start both on the same host
-                    // clock only after every transition renderer is drawable.
-                    player?.pause()
-                    started = playSceneTransitionStage(.reveal, selection: selection,
-                                                       from: store, context: context)
-                } else {
-                    started = false
-                }
+                started = startActiveSceneWithReveal(asset, selection: selection, from: store, context: context)
             case .transition(let phase, let selection):
                 kind = .composite
                 started = playSceneTransitionStage(phase, selection: selection, from: store, context: context)
@@ -863,6 +931,19 @@ public final class SnoopySceneView: NSView {
         }
     }
 
+    /// ActiveScene + Reveal over the outgoing idle surface: that RPH/Idle
+    /// surface remains above the movie while Reveal is prepared, and both
+    /// start on the same host clock only after every transition renderer is
+    /// drawable.
+    private func startActiveSceneWithReveal(
+        _ asset: AssetRecord, selection: SceneTransitionSelection,
+        from store: AssetStore, context: SelectionContext
+    ) -> Bool {
+        guard startActiveVideo(asset, from: store, context: context) else { return false }
+        player?.pause()
+        return playSceneTransitionStage(.reveal, selection: selection, from: store, context: context)
+    }
+
     private func nextPlaybackKind() -> PlaybackKind {
         if ProcessInfo.processInfo.environment["SNOOPY_TEST_START_WITH_COMPOSITE"] == "1",
            sessionState.currentIdleSceneID == nil, !hasPlayedInitialActiveScene {
@@ -877,8 +958,14 @@ public final class SnoopySceneView: NSView {
         if ProcessInfo.processInfo.environment["SNOOPY_FORCE_PLAYBACK_KIND"] == "video" { return .video }
         if ProcessInfo.processInfo.environment["SNOOPY_FORCE_PLAYBACK_KIND"] == "composite" { return .composite }
         if sessionState.currentIdleSceneID != nil {
-            if shouldRotateIdleScene {
+            // A character parked at RPH for the rotation (D) forces the
+            // transition even when the build-time prediction was early.
+            let parkedForRotation = parkedCharacter?.forRotation == true
+            if shouldRotateIdleScene || parkedForRotation {
                 idleSceneChangeRequested = true
+                if parkedForRotation, !shouldRotateIdleScene {
+                    NSLog("SnoopyTVScreenSaver: reaction parked: forcing active scene transition")
+                }
                 NSLog("SnoopyTVScreenSaver: idle scene reached Apple 240s target; requesting active scene transition")
                 return .video
             }
@@ -926,6 +1013,7 @@ public final class SnoopySceneView: NSView {
         currentPaletteAssetID = nil
         currentSceneOffset = nil
         pendingCharacterAssetIDs.removeAll()
+        parkedCharacter = nil
     }
 
     private func sessionChoice(from assets: [AssetRecord], pool: String, context: SelectionContext) -> AssetRecord? {
@@ -999,6 +1087,24 @@ public final class SnoopySceneView: NSView {
             // opaque again to exit IdleScene. Keep one moving player through
             // the complete Hide -> Active -> Reveal cycle.
             if hasOutgoingIdle {
+                if let parked = parkedCharacter, parked.style == ReactionStyle.standard {
+                    // The character already holds at RPH (an AP left through
+                    // its V2 shortcut, or a hold armed the park): no BP_To_RPH
+                    // exit; ActiveScene + Reveal start over the hold. When the
+                    // movie itself fails to start the park survives (the retry
+                    // keeps the hold and picks another ActiveScene); when the
+                    // reveal fails after the movie mounted, the retry's
+                    // non-preserving cleanup drops both the hold and the park.
+                    NSLog("SnoopyTVScreenSaver: reaction parked at %@; skipping idleExitSequence and starting %@ + reveal",
+                          ReactionStyle.nodeID(for: parked.style), selected.id)
+                    pendingSceneStages = [.transition(.hide, selection)]
+                    guard startActiveSceneWithReveal(selected, selection: selection, from: store, context: context) else {
+                        pendingSceneStages.removeAll()
+                        pendingIdleEntrySequence = nil
+                        return false
+                    }
+                    return true
+                }
                 guard let currentPoseID = sessionState.currentBasePoseID,
                       let exitSequence = playbackGraph?.idleExitSequence(from: currentPoseID) else {
                     pendingIdleEntrySequence = nil
@@ -1023,6 +1129,9 @@ public final class SnoopySceneView: NSView {
             return true
         }
         if idleSceneChangeRequested {
+            // A hard cut mounts the opaque movie above the retiring surface:
+            // a reaction hold has nothing left to animate for underneath it.
+            if parkedCharacter != nil { retiringCompositePlayer?.pause() }
             clearIdleSceneState()
             idleSceneChangeRequested = false
         }
@@ -1213,6 +1322,9 @@ public final class SnoopySceneView: NSView {
         cleanTransitionOverlay()
         retirePreviousCompositeSurface()
         CATransaction.commit()
+        // The hold surface (if any) was torn down at the reveal commit; the
+        // character is off screen and no longer parked.
+        parkedCharacter = nil
         currentAssetID = id
         isPlaying = true
         let duration = player?.currentItem?.duration.seconds ?? 0
@@ -1797,6 +1909,11 @@ public final class SnoopySceneView: NSView {
         let urls: [URL]
         let sprite: SpriteRecord
         let loopCount: Int
+        /// Trailing URLs that are the asset's Outro phase (0 for combined
+        /// plans), so an AP loop can be cut at a loop boundary for a V2
+        /// `AP_To_R**` shortcut without drawing a second loop count.
+        var outroCount: Int = 0
+        var urlsWithoutOutro: [URL] { Array(urls.dropLast(outroCount)) }
     }
 
     private struct VisitorPlaybackPlan {
@@ -1882,16 +1999,19 @@ public final class SnoopySceneView: NSView {
         }
         seed &+= 1
         var urls = intro
+        var outroCount = 0
         if !hasExplicitPhases && !repeatOneShot {
             urls.append(contentsOf: loop)
             urls.append(contentsOf: outro)
         } else if loop.isEmpty {
             urls.append(contentsOf: outro)
+            outroCount = outro.count
         } else {
             for _ in 0..<loops { urls.append(contentsOf: loop) }
             urls.append(contentsOf: outro)
+            outroCount = outro.count
         }
-        return PhasedVideoPlan(urls: urls, sprite: representative, loopCount: loops)
+        return PhasedVideoPlan(urls: urls, sprite: representative, loopCount: loops, outroCount: outroCount)
     }
 
     private func startVideoComposition(
@@ -1903,7 +2023,8 @@ public final class SnoopySceneView: NSView {
         palette: (background: NSColor, overlay: NSColor?),
         pendingPoseID: String?,
         visitor: VisitorPlaybackPlan? = nil,
-        characterAnimationKind: CharacterAnimationKind? = nil
+        characterAnimationKind: CharacterAnimationKind? = nil,
+        holdBoundaryAfterSegment: Int? = nil
     ) -> Bool {
         guard !plan.urls.isEmpty else { return false }
         let estimatedSeconds = estimatedDuration(of: plan.urls)
@@ -1927,7 +2048,15 @@ public final class SnoopySceneView: NSView {
         addSubview(host)
         compositeVideoHostView = host
 
-        guard let seamlessItem = seamlessVideoItem(for: plan.urls) else { return false }
+        guard let composition = seamlessComposition(for: plan.urls) else { return false }
+        let seamlessItem = composition.item
+        // The logical end of a reaction hold item: the enter's last frame.
+        // Playback "finishes" there while the hold repeats keep the retiring
+        // surface animating until the reveal tree replaces it.
+        let holdBoundaryTime: CMTime? = holdBoundaryAfterSegment.flatMap { index in
+            index >= 0 && index < composition.segmentEnds.count ? composition.segmentEnds[index] : nil
+        }
+        let compositionEndSeconds = composition.segmentEnds.last?.seconds ?? 0
         // A multi-item AVQueuePlayer briefly exposes the transparent backdrop
         // while VideoToolbox switches decoders between Intro/Loop/Outro or an
         // action and its returning BasePose. A single composition item lets
@@ -2063,6 +2192,24 @@ public final class SnoopySceneView: NSView {
             }
             self.installWatchdog(defaultSeconds: max(estimatedSeconds, visitorSeconds) + 3)
             queue.play()
+            if let boundary = holdBoundaryTime {
+                self.playerBoundaryObserver = queue.addBoundaryTimeObserver(
+                    forTimes: [NSValue(time: boundary)], queue: .main
+                ) { [weak self, weak queue] in
+                    DispatchQueue.main.async {
+                        guard let self, let queue, self.player === queue, self.isPlaying,
+                              self.compositePlaybackGeneration == generation else { return }
+                        // No visitor may outlive this item: its end observer
+                        // survives the preserving cleanup and would abort the
+                        // reveal stage from inside its preroll.
+                        self.removeVisitorPlayback()
+                        self.retiringSurfaceKeepsPlaying = true
+                        NSLog("SnoopyTVScreenSaver: reaction hold %@ reached logical end at %.3f (item end %.3f); keeps playing while the next stage prerolls",
+                              assetID, boundary.seconds, compositionEndSeconds)
+                        self.finishCurrentPlayback("reaction hold boundary")
+                    }
+                }
+            }
             NSLog("SnoopyTVScreenSaver: composite surface committed %@ time=%.3f",
                   assetID, queue.currentTime().seconds)
         }
@@ -2153,11 +2300,18 @@ public final class SnoopySceneView: NSView {
     }
 
     private func seamlessVideoItem(for urls: [URL]) -> AVPlayerItem? {
+        seamlessComposition(for: urls)?.item
+    }
+
+    /// One composition item for `urls` plus the composition time at which each
+    /// segment ends (after per-segment proxy trims), for boundary observers.
+    private func seamlessComposition(for urls: [URL]) -> (item: AVPlayerItem, segmentEnds: [CMTime])? {
         let composition = AVMutableComposition()
         guard let destination = composition.addMutableTrack(
             withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid
         ) else { return nil }
         var cursor = CMTime.zero
+        var segmentEnds: [CMTime] = []
         var copiedTransform = false
         var assetCache: [URL: AVURLAsset] = [:]
         do {
@@ -2185,6 +2339,7 @@ public final class SnoopySceneView: NSView {
                     CMTimeRange(start: sourceStart, duration: sourceDuration), of: source, at: cursor
                 )
                 cursor = CMTimeAdd(cursor, sourceDuration)
+                segmentEnds.append(cursor)
             }
         } catch {
             NSLog("SnoopyTVScreenSaver: unable to assemble seamless composite item %@",
@@ -2192,7 +2347,7 @@ public final class SnoopySceneView: NSView {
             return nil
         }
         guard CMTimeCompare(cursor, .zero) > 0 else { return nil }
-        return AVPlayerItem(asset: composition)
+        return (AVPlayerItem(asset: composition), segmentEnds)
     }
 
     @discardableResult
@@ -2406,6 +2561,9 @@ public final class SnoopySceneView: NSView {
         if pendingCharacterAssetIDs.isEmpty, pendingSceneStages.isEmpty,
            let entrySequence = pendingIdleEntrySequence {
             pendingIdleEntrySequence = nil
+            // The hide's ST clip brought the character back at RPH and this
+            // entry returns it to a BP: no park can be outstanding here.
+            parkedCharacter = nil
             sessionState.currentBasePoseID = entrySequence.endPoseID
             return playCharacterSequence(
                 entrySequence, idle: idle,
@@ -2430,6 +2588,30 @@ public final class SnoopySceneView: NSView {
             pose = selected
             sessionState.currentBasePoseID = selected.id
         }
+        let stage = IdleSceneStage(
+            idle: idle, backgroundImageURL: backgroundImageURL, backgroundVideoURL: backgroundVideoURL,
+            backgroundSprite: backgroundSprite, palette: palette
+        )
+        if pendingCharacterAssetIDs.isEmpty, pendingSceneStages.isEmpty,
+           let parked = parkedCharacter, let graph = playbackGraph {
+            // Safety net: a park that no scene transition consumed (an env
+            // override chose a composite, or the idle scene was cleared)
+            // returns to its BP through the style's exit, as the hide entry does.
+            parkedCharacter = nil
+            let target = posePool.contains { $0.id == parked.returnPoseID } ? parked.returnPoseID : pose.id
+            if let entry = graph.idleEntrySequence(to: target, style: parked.style) {
+                NSLog("SnoopyTVScreenSaver: reaction unparked: %@ -> %@ (no scene transition consumed the park)",
+                      ReactionStyle.nodeID(for: parked.style), target)
+                sessionState.currentBasePoseID = target
+                return playCharacterSequence(
+                    entry, idle: idle,
+                    backgroundImageURL: backgroundImageURL, backgroundVideoURL: backgroundVideoURL,
+                    backgroundSprite: backgroundSprite, palette: palette, store: store, visitor: nil
+                )
+            }
+            NSLog("SnoopyTVScreenSaver: ERROR reaction unpark impossible for style %@; continuing from %@",
+                  parked.style, pose.id)
+        }
         // A queued BP transition/reaction/action must finish against the same
         // idle scene and palette. This mirrors CharacterAnimationManager's
         // pendingAnimationQueue instead of re-randomizing every segment.
@@ -2453,6 +2635,18 @@ public final class SnoopySceneView: NSView {
         var coupledContext = context
         if visitor?.isFullscreenEffect == true {
             coupledContext.activeCategories.insert("sceneFullscreenEffectVisitor")
+        }
+        // This is "the next character boundary" of tvOS's reactionTriggerEvent:
+        // the character rests in a BP, the room and palette are resolved and
+        // nothing is queued. A fresh trigger is consumed here, whatever the
+        // mix asked for; the reaction replaces that animation (A/B below).
+        var reactionEvent: ReactionTriggerEvent?
+        if pendingSceneStages.isEmpty, parkedCharacter == nil {
+            if let armed = startupReactionTrigger, idleSceneAnimationCount >= 2 {
+                startupReactionTrigger = nil
+                fireReactionTrigger(armed, source: "env")
+            }
+            reactionEvent = consumeFreshReactionTrigger()
         }
 
         let forcedCharacterKind = ProcessInfo.processInfo.environment["SNOOPY_FORCE_CHARACTER_KIND"]
@@ -2502,10 +2696,34 @@ public final class SnoopySceneView: NSView {
         if let forcedID = ProcessInfo.processInfo.environment["SNOOPY_FORCE_CHARACTER_ASSET_ID"] {
             allActions = allActions.filter { $0.id == forcedID }
         }
+        if let reactionEvent {
+            // "A reactionPose was queued for %s, skipping standard idle
+            // animation." From an AP the loop is cut short and the outro
+            // skipped (AP_To_R**); otherwise the reaction starts from the BP.
+            // Neither path could build a complete, playable sequence: the
+            // standard idle animation plays instead.
+            if requestedActionKind == "characterAdditionalPose",
+               let started = playReactionFromAdditionalPose(
+                   reactionEvent, from: pose, actions: allActions, in: stage, store: store,
+                   visitor: visitor, context: coupledContext
+               ) {
+                return started
+            }
+            if let started = playReaction(
+                reactionEvent, from: pose, in: stage, store: store, visitor: visitor, context: coupledContext
+            ) {
+                return started
+            }
+        }
         let sequence = characterAnimationSequence(
             startingAt: pose.id, actions: allActions, context: coupledContext
         )
         if let sequence {
+            if let started = playRotationParkedSequence(
+                sequence, from: pose, in: stage, store: store, visitor: visitor
+            ) {
+                return started
+            }
             return playCharacterSequence(
                 sequence, idle: idle,
                 backgroundImageURL: backgroundImageURL, backgroundVideoURL: backgroundVideoURL,
@@ -2557,41 +2775,82 @@ public final class SnoopySceneView: NSView {
         return sequence
     }
 
+    /// The resolved room a character item is composed against.
+    private struct IdleSceneStage {
+        let idle: AssetRecord
+        let backgroundImageURL: URL?
+        let backgroundVideoURL: URL?
+        let backgroundSprite: SpriteRecord?
+        let palette: (background: NSColor, overlay: NSColor?)
+    }
+
     private func playCharacterSequence(
         _ sequence: CharacterPlaybackSequence, idle: AssetRecord,
         backgroundImageURL: URL?, backgroundVideoURL: URL?, backgroundSprite: SpriteRecord?,
         palette: (background: NSColor, overlay: NSColor?), store: AssetStore,
         visitor: VisitorPlaybackPlan?
     ) -> Bool {
+        let stage = IdleSceneStage(
+            idle: idle, backgroundImageURL: backgroundImageURL, backgroundVideoURL: backgroundVideoURL,
+            backgroundSprite: backgroundSprite, palette: palette
+        )
+        guard let plans = characterPlans(for: sequence, store: store) else {
+            return playCharacterSequenceFallback(sequence, in: stage, store: store, visitor: visitor)
+        }
+        return playCharacterPlans(
+            plans, assetIDs: sequence.assets.map(\.id), endPoseID: sequence.endPoseID,
+            in: stage, visitor: visitor
+        )
+    }
+
+    /// The seamless plan of every asset in `sequence`, built in order. Stops
+    /// at the first asset without one and returns nil there, so the seed
+    /// advances exactly as it always has on the HEIC-fallback path.
+    private func characterPlans(for sequence: CharacterPlaybackSequence, store: AssetStore) -> [PhasedVideoPlan]? {
         var plans: [PhasedVideoPlan] = []
         for asset in sequence.assets {
             let repeatBase = asset.kind == "characterBasePose"
-            guard let plan = phasedVideoPlan(for: asset, store: store, repeatOneShot: repeatBase) else {
-                // Keep the graph intact on the HEIC fallback path. The legacy
-                // segment player still retains the previous surface between
-                // each node, and action/RPH nodes append their target BP.
-                var fallback = sequence.assets
-                if fallback.last?.kind == "characterBasePose" { fallback.removeLast() }
-                guard let first = fallback.first else { return false }
-                pendingCharacterAssetIDs = Array(fallback.dropFirst()).map(\.id)
-                return playCharacterSegment(
-                    first, idle: idle, currentPose: sequence.startPoseID,
-                    backgroundImageURL: backgroundImageURL, backgroundVideoURL: backgroundVideoURL,
-                    backgroundSprite: backgroundSprite, palette: palette, store: store, visitor: visitor
-                )
-            }
+            guard let plan = phasedVideoPlan(for: asset, store: store, repeatOneShot: repeatBase) else { return nil }
             plans.append(plan)
         }
+        return plans
+    }
+
+    /// Keep the graph intact on the HEIC fallback path. The legacy segment
+    /// player still retains the previous surface between each node, and
+    /// action/RPH nodes append their target BP.
+    private func playCharacterSequenceFallback(
+        _ sequence: CharacterPlaybackSequence, in stage: IdleSceneStage, store: AssetStore,
+        visitor: VisitorPlaybackPlan?
+    ) -> Bool {
+        var fallback = sequence.assets
+        if fallback.last?.kind == "characterBasePose" { fallback.removeLast() }
+        guard let first = fallback.first else { return false }
+        pendingCharacterAssetIDs = Array(fallback.dropFirst()).map(\.id)
+        return playCharacterSegment(
+            first, idle: stage.idle, currentPose: sequence.startPoseID,
+            backgroundImageURL: stage.backgroundImageURL, backgroundVideoURL: stage.backgroundVideoURL,
+            backgroundSprite: stage.backgroundSprite, palette: stage.palette, store: store, visitor: visitor
+        )
+    }
+
+    /// One seamless item for an already-planned character sequence.
+    private func playCharacterPlans(
+        _ plans: [PhasedVideoPlan], assetIDs: [String], endPoseID: String,
+        in stage: IdleSceneStage, visitor: VisitorPlaybackPlan?,
+        holdBoundaryAfterSegment: Int? = nil
+    ) -> Bool {
         guard let firstPlan = plans.first else { return false }
         let combined = PhasedVideoPlan(
             urls: plans.flatMap(\.urls), sprite: firstPlan.sprite,
             loopCount: plans.reduce(0) { $0 + $1.loopCount }
         )
         return startVideoComposition(
-            assetID: "\(idle.id)+" + sequence.assets.map(\.id).joined(separator: "+"),
-            backgroundImage: backgroundImageURL, backgroundVideo: backgroundVideoURL,
-            backgroundSprite: backgroundSprite, plan: combined, palette: palette,
-            pendingPoseID: sequence.endPoseID, visitor: visitor
+            assetID: "\(stage.idle.id)+" + assetIDs.joined(separator: "+"),
+            backgroundImage: stage.backgroundImageURL, backgroundVideo: stage.backgroundVideoURL,
+            backgroundSprite: stage.backgroundSprite, plan: combined, palette: stage.palette,
+            pendingPoseID: endPoseID, visitor: visitor,
+            holdBoundaryAfterSegment: holdBoundaryAfterSegment
         )
     }
 
@@ -2614,7 +2873,39 @@ public final class SnoopySceneView: NSView {
         case "characterBasePose": animationKind = .basePose
         default: animationKind = nil
         }
+        let isIdleExitEnter = asset.kind == "characterReactionTransitionPose"
+            && asset.phase?.kind == "enter" && nextStageIsActiveSceneWithReveal
         if let plan = phasedVideoPlan(for: asset, store: store) {
+            if isIdleExitEnter, let graph = playbackGraph,
+               let tail = reactionHoldTail(style: graph.reactionStyle(of: asset), store: store) {
+                // Instead of freezing on the enter's last frame while the
+                // ActiveScene + Reveal preroll, the character keeps breathing
+                // in the generic hold. The boundary at the enter's end
+                // finishes this segment; the hold repeats keep playing on the
+                // retiring surface until the reveal commit tears it down.
+                let combined = PhasedVideoPlan(
+                    urls: plan.urls + tail.plan.urls, sprite: plan.sprite,
+                    loopCount: plan.loopCount + tail.repeats
+                )
+                NSLog("SnoopyTVScreenSaver: reaction hold: %@ then %@ x%d (%.1fs) while the scene transition prerolls",
+                      asset.id, tail.hold.id, tail.repeats, estimatedDuration(of: plan.urls) + tail.seconds)
+                let started = startVideoComposition(
+                    assetID: "\(idle.id)+\(asset.id)+\(tail.hold.id)x\(tail.repeats)",
+                    backgroundImage: backgroundImageURL,
+                    backgroundVideo: backgroundVideoURL,
+                    backgroundSprite: backgroundSprite, plan: combined,
+                    palette: palette, pendingPoseID: endPose, visitor: nil,
+                    holdBoundaryAfterSegment: plan.urls.count - 1
+                )
+                // Park only once the hold item is really under way: a failed
+                // composition leaves no RPH surface for the transition to use.
+                if started {
+                    parkedCharacter = ParkedCharacter(
+                        style: graph.reactionStyle(of: asset), returnPoseID: currentPose, forRotation: true
+                    )
+                }
+                return started
+            }
             if asset.kind == "characterReactionTransitionPose",
                asset.phase?.kind == "exit",
                let basePose = playbackGraph?.assetsByID[endPose],
@@ -2680,6 +2971,12 @@ public final class SnoopySceneView: NSView {
                 characterAnimationKind: animationKind
             )
         }
+        if isIdleExitEnter, let graph = playbackGraph,
+           ProcessInfo.processInfo.environment["SNOOPY_DISABLE_REACTION_HOLD"] != "1",
+           graph.reactionHold(style: graph.reactionStyle(of: asset)) != nil {
+            // A HEIC frame sequence cannot be concatenated with the hold's MOV.
+            NSLog("SnoopyTVScreenSaver: reaction hold skipped: no proxy for %@", asset.id)
+        }
         var fallbackFrames = phasedFrameURLs(for: asset, store: store, minimumDuration: 0)
         guard !fallbackFrames.isEmpty else { return false }
         var appendedBaseFrameCount = 0
@@ -2711,6 +3008,286 @@ public final class SnoopySceneView: NSView {
             sessionState.recordCharacterAnimation(
                 .basePose, duration: Double(appendedBaseFrameCount) / 24.0
             )
+        }
+        return started
+    }
+
+    // MARK: - Reaction poses (docs/REACTION_POSES.md §5)
+
+    private var nextStageIsActiveSceneWithReveal: Bool {
+        guard let first = pendingSceneStages.first, case .activeSceneWithReveal = first else { return false }
+        return true
+    }
+
+    /// `SNOOPY_REACTION_TRIGGER` and `SNOOPY_REACTION_INTERVAL_SECONDS`, read
+    /// once per `start()`.
+    private func configureReactionEnvironment() {
+        let environment = ProcessInfo.processInfo.environment
+        reactionIntervalTimer?.invalidate()
+        reactionIntervalTimer = nil
+        startupReactionTrigger = nil
+        if let trigger = environment["SNOOPY_REACTION_TRIGGER"], !trigger.isEmpty {
+            // Fired literally at startup it would expire during the initial
+            // ActiveScene; it is armed for the first idle boundary after one
+            // character animation instead.
+            startupReactionTrigger = trigger
+            NSLog("SnoopyTVScreenSaver: reaction trigger=%@ source=env armed for the first idle scene", trigger)
+        }
+        if let seconds = environment["SNOOPY_REACTION_INTERVAL_SECONDS"].flatMap(Double.init), seconds >= 1 {
+            let timer = Timer(timeInterval: seconds, repeats: true) { [weak self] _ in
+                guard let self, !self.isStopping else { return }
+                let triggers = ReactionTrigger.all.filter { $0 != ReactionTrigger.generic }
+                let trigger = triggers[PlaybackSessionState.mixedIndex(seed: self.seed, count: triggers.count)]
+                self.seed &+= 1
+                self.fireReactionTrigger(trigger, source: "interval")
+            }
+            // Common modes, like the host clock, so a menu or window drag
+            // does not stop the interval.
+            RunLoop.main.add(timer, forMode: .common)
+            reactionIntervalTimer = timer
+            NSLog("SnoopyTVScreenSaver: reaction interval=%.0fs source=interval armed", seconds)
+        }
+    }
+
+    private func fireReactionTrigger(_ trigger: String, source: String) {
+        guard !isStopping else {
+            NSLog("SnoopyTVScreenSaver: reaction trigger=%@ ignored (stopped)", trigger)
+            return
+        }
+        let known = ReactionTrigger.all.contains(trigger)
+        // Newest wins, like tvOS "Updated reactionTriggerEvent". Unknown
+        // tokens are kept: they can still be answered by a generic hold.
+        pendingReactionTrigger = ReactionTriggerEvent(
+            trigger: trigger, firedAt: ProcessInfo.processInfo.systemUptime, source: source
+        )
+        NSLog("SnoopyTVScreenSaver: reaction trigger=%@ source=%@ known=%d pending until +%.0fs",
+              trigger, source, known ? 1 : 0, Self.reactionTriggerTimeout)
+    }
+
+    /// The pending trigger if it is still fresh and was not handled; expired
+    /// or already-handled events are dropped here.
+    private func consumeFreshReactionTrigger() -> ReactionTriggerEvent? {
+        guard let event = pendingReactionTrigger else { return nil }
+        let age = ProcessInfo.processInfo.systemUptime - event.firedAt
+        if age > Self.reactionTriggerTimeout {
+            pendingReactionTrigger = nil
+            NSLog("SnoopyTVScreenSaver: reaction trigger=%@ expired after %.1fs", event.trigger, age)
+            return nil
+        }
+        if event == lastHandledReactionTrigger {
+            pendingReactionTrigger = nil
+            NSLog("SnoopyTVScreenSaver: reaction trigger=%@ already handled; not replayed", event.trigger)
+            return nil
+        }
+        return event
+    }
+
+    private func markReactionTriggerHandled(_ event: ReactionTriggerEvent, outcome: String) {
+        lastHandledReactionTrigger = event
+        if pendingReactionTrigger == event { pendingReactionTrigger = nil }
+        NSLog("SnoopyTVScreenSaver: reaction trigger=%@ handled (%@)", event.trigger, outcome)
+    }
+
+    /// The reaction poses that can answer `event` from `originID` (a BP or an
+    /// AP): every style with an authored enter from there, poses tagged with
+    /// the trigger before the generic holds. `SNOOPY_FORCE_REACTION_ID` pins
+    /// one pose (and yields nothing when it is not enterable from here).
+    private func reactionPoseCandidates(for event: ReactionTriggerEvent, from originID: String) -> [AssetRecord] {
+        guard let graph = playbackGraph else { return [] }
+        var specific: [AssetRecord] = []
+        var generic: [AssetRecord] = []
+        for style in graph.supportedReactionStyles(from: originID) {
+            for pose in graph.reactionPoses(style: style, trigger: event.trigger) {
+                if pose.reactionTriggers.contains(event.trigger) {
+                    specific.append(pose)
+                } else {
+                    generic.append(pose)
+                }
+            }
+        }
+        if let forced = ProcessInfo.processInfo.environment["SNOOPY_FORCE_REACTION_ID"] {
+            return (specific + generic).filter { $0.id == forced }
+        }
+        // Specific before generic is decided here: the weighted draw only
+        // ranks them 3:2, but tvOS plays the tagged pose when one exists.
+        return specific.isEmpty ? generic : specific
+    }
+
+    /// A: `[BP_To_R**, pose, R**_To_BP, BP]` from the current base pose. Nil
+    /// when nothing could be queued; then the standard idle animation plays.
+    private func playReaction(
+        _ event: ReactionTriggerEvent, from pose: AssetRecord, in stage: IdleSceneStage,
+        store: AssetStore, visitor: VisitorPlaybackPlan?, context: SelectionContext
+    ) -> Bool? {
+        guard let graph = playbackGraph else { return nil }
+        let candidates = reactionPoseCandidates(for: event, from: pose.id)
+        guard !candidates.isEmpty else {
+            markReactionTriggerHandled(event, outcome: "no reaction pose reachable from \(pose.id)")
+            return nil
+        }
+        var triggerContext = context
+        triggerContext.reactionTrigger = event.trigger
+        guard let reaction = sessionChoice(from: candidates, pool: "reactionPoses", context: triggerContext),
+              let sequence = graph.reactionSequence(from: pose.id, pose: reaction, to: pose.id) else {
+            markReactionTriggerHandled(event, outcome: "graph could not build enter/exit")
+            return nil
+        }
+        // The exit returns to the current BP; its resting loop closes the
+        // item, so `pendingBasePoseID` stays a valid BP id.
+        guard let plans = characterPlans(for: sequence, store: store) else {
+            markReactionTriggerHandled(event, outcome: "media/proxy missing for \(sequence.assets.map(\.id))")
+            return nil
+        }
+        NSLog("SnoopyTVScreenSaver: reaction queued trigger=%@ style=%@ pose=%@ from=%@ sequence=%@",
+              event.trigger, ReactionStyle.nodeID(for: graph.reactionStyle(of: reaction)), reaction.id, pose.id,
+              sequence.assets.map(\.id).joined(separator: " -> "))
+        markReactionTriggerHandled(event, outcome: "queued \(reaction.id)")
+        return playCharacterPlans(
+            plans, assetIDs: sequence.assets.map(\.id), endPoseID: sequence.endPoseID,
+            in: stage, visitor: visitor
+        )
+    }
+
+    /// B: `[bridge?, AP intro, AP loop x N, AP_To_R**, pose, R**_To_BP, BP]`.
+    /// Only APs with a V2 shortcut in a style that has a pose for the trigger
+    /// are candidates (the companion styles from AP010/AP021/AP031). Nil when
+    /// not applicable; A then reacts from the base pose right away.
+    private func playReactionFromAdditionalPose(
+        _ event: ReactionTriggerEvent, from pose: AssetRecord, actions: [AssetRecord],
+        in stage: IdleSceneStage, store: AssetStore, visitor: VisitorPlaybackPlan?,
+        context: SelectionContext
+    ) -> Bool? {
+        guard let graph = playbackGraph else { return nil }
+        let shortcutActions = actions.filter { action in
+            graph.actionSequence(currentPoseID: pose.id, target: action) != nil
+                && !reactionPoseCandidates(for: event, from: action.id).isEmpty
+        }
+        guard !shortcutActions.isEmpty else {
+            NSLog("SnoopyTVScreenSaver: reaction: no additional pose with a V2 shortcut answers trigger=%@ from %@; reacting from the base pose instead",
+                  event.trigger, pose.id)
+            return nil
+        }
+        // From here on the AP draw has been recorded in the session bag and
+        // logged as a character queue, so every refusal says why that queue
+        // never played.
+        guard let sequence = characterAnimationSequence(
+                  startingAt: pose.id, actions: shortcutActions, context: context
+              ),
+              let apIndex = sequence.assets.firstIndex(where: { $0.kind == "characterAdditionalPose" }),
+              let apEndPoseID = sequence.assets[apIndex].endCharacterBasePoseID else {
+            NSLog("SnoopyTVScreenSaver: reaction: AP shortcut sequence unavailable from %@ for trigger=%@; reacting from the base pose instead",
+                  pose.id, event.trigger)
+            return nil
+        }
+        let ap = sequence.assets[apIndex]
+        var triggerContext = context
+        triggerContext.reactionTrigger = event.trigger
+        guard let reaction = sessionChoice(
+                  from: reactionPoseCandidates(for: event, from: ap.id), pool: "reactionPoses", context: triggerContext
+              ),
+              let tail = graph.reactionSequence(from: ap.id, pose: reaction, to: apEndPoseID) else {
+            NSLog("SnoopyTVScreenSaver: reaction: AP shortcut from %@ has no playable pose or exit for trigger=%@; reacting from the base pose instead",
+                  ap.id, event.trigger)
+            return nil
+        }
+        // [bridge?, ap] + [AP_To_R**, pose, R**_To_BP, BP]; the target BP is
+        // the AP's authored end pose, where its outro would have led.
+        let head = Array(sequence.assets[...apIndex])
+        let full = CharacterPlaybackSequence(
+            startPoseID: pose.id, endPoseID: tail.endPoseID, assets: head + tail.assets
+        )
+        guard var plans = characterPlans(for: full, store: store) else {
+            // Never the segment fallback: it would play the outro and the
+            // AP's BP before the shortcut enter.
+            NSLog("SnoopyTVScreenSaver: reaction: AP shortcut needs proxies for %@; reacting from the base pose instead",
+                  full.assets.map(\.id).joined(separator: " -> "))
+            return nil
+        }
+        let apPlan = plans[apIndex]
+        plans[apIndex] = PhasedVideoPlan(urls: apPlan.urlsWithoutOutro, sprite: apPlan.sprite, loopCount: apPlan.loopCount)
+        NSLog("SnoopyTVScreenSaver: reaction queued trigger=%@ style=%@ pose=%@ from=%@ (AP shortcut, outro skipped, loops=%d) sequence=%@",
+              event.trigger, ReactionStyle.nodeID(for: graph.reactionStyle(of: reaction)), reaction.id, ap.id,
+              apPlan.loopCount, full.assets.map(\.id).joined(separator: " -> "))
+        markReactionTriggerHandled(event, outcome: "queued \(reaction.id)")
+        return playCharacterPlans(
+            plans, assetIDs: full.assets.map(\.id), endPoseID: full.endPoseID, in: stage, visitor: visitor
+        )
+    }
+
+    /// The generic hold of `style` repeated to cover the transition preroll,
+    /// or nil when the V2 hold is absent or `SNOOPY_DISABLE_REACTION_HOLD=1`.
+    private func reactionHoldTail(
+        style: String, store: AssetStore
+    ) -> (hold: AssetRecord, plan: PhasedVideoPlan, repeats: Int, seconds: TimeInterval)? {
+        guard ProcessInfo.processInfo.environment["SNOOPY_DISABLE_REACTION_HOLD"] != "1",
+              let graph = playbackGraph,
+              let hold = graph.reactionHold(style: style),
+              let holdPlan = phasedVideoPlan(for: hold, store: store) else { return nil }
+        let holdSeconds = max(0.5, estimatedDuration(of: holdPlan.urls))
+        let repeats = max(1, Int(ceil(Self.reactionHoldSeconds / holdSeconds)))
+        var urls: [URL] = []
+        for _ in 0..<repeats { urls.append(contentsOf: holdPlan.urls) }
+        let plan = PhasedVideoPlan(urls: urls, sprite: holdPlan.sprite, loopCount: repeats)
+        return (hold, plan, repeats, holdSeconds * Double(repeats))
+    }
+
+    /// D: when the idle scene will be due to rotate once this AP sequence
+    /// ends and the AP has a V2 `AP_To_RPH` shortcut, the loop leaves through
+    /// it (outro and BP skipped) into the hold; the rotation then starts from
+    /// RPH without a `BP_To_RPH` exit. Nil when not applicable (the caller
+    /// plays the sequence as today); the plans are built once either way.
+    private func playRotationParkedSequence(
+        _ sequence: CharacterPlaybackSequence, from pose: AssetRecord, in stage: IdleSceneStage,
+        store: AssetStore, visitor: VisitorPlaybackPlan?
+    ) -> Bool? {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["SNOOPY_FORCE_PLAYBACK_KIND"] == nil,
+              environment["SNOOPY_TEST_NATIVE_SEQUENCE"] != "1",
+              let apIndex = sequence.assets.firstIndex(where: { $0.kind == "characterAdditionalPose" }),
+              let graph = playbackGraph,
+              let enter = graph.reactionEnter(from: sequence.assets[apIndex].id, style: ReactionStyle.standard)
+        else { return nil }
+        let ap = sequence.assets[apIndex]
+        let endPoseID = ap.endCharacterBasePoseID ?? pose.id
+        guard let plans = characterPlans(for: sequence, store: store) else {
+            return playCharacterSequenceFallback(sequence, in: stage, store: store, visitor: visitor)
+        }
+        // Media time, scaled to wall time like the scene budget it is
+        // compared with.
+        let headSeconds = (plans[..<apIndex].reduce(0) { $0 + estimatedDuration(of: $1.urls) }
+            + estimatedDuration(of: plans[apIndex].urlsWithoutOutro)) / playbackRate
+        let elapsed = idleSceneStartedAt.map { ProcessInfo.processInfo.systemUptime - $0 } ?? 0
+        let rotationDueAfterThisAnimation = idleSceneAnimationCount >= idleSceneTargetAnimationCount
+            || elapsed + headSeconds >= idleSceneTargetDuration
+        guard rotationDueAfterThisAnimation, let enterPlan = phasedVideoPlan(for: enter, store: store) else {
+            return playCharacterPlans(
+                plans, assetIDs: sequence.assets.map(\.id), endPoseID: sequence.endPoseID,
+                in: stage, visitor: visitor
+            )
+        }
+        var parkedPlans = Array(plans[...apIndex])
+        let apPlan = plans[apIndex]
+        parkedPlans[apIndex] = PhasedVideoPlan(urls: apPlan.urlsWithoutOutro, sprite: apPlan.sprite, loopCount: apPlan.loopCount)
+        parkedPlans.append(enterPlan)
+        var ids = sequence.assets[...apIndex].map(\.id) + [enter.id]
+        var holdBoundary: Int?
+        if let tail = reactionHoldTail(style: ReactionStyle.standard, store: store) {
+            holdBoundary = parkedPlans.reduce(0) { $0 + $1.urls.count } - 1
+            parkedPlans.append(tail.plan)
+            ids.append("\(tail.hold.id)x\(tail.repeats)")
+        }
+        NSLog("SnoopyTVScreenSaver: reaction parked: %@ leaves through %@ (outro skipped, loops=%d) for idle rotation elapsed=%.1f target=%.0f",
+              ap.id, enter.id, apPlan.loopCount, elapsed, idleSceneTargetDuration)
+        // No visitor on a parked item: its end observer survives the
+        // preserving cleanup and would abort the reveal from its preroll.
+        let started = playCharacterPlans(
+            parkedPlans, assetIDs: ids, endPoseID: endPoseID, in: stage, visitor: nil,
+            holdBoundaryAfterSegment: holdBoundary
+        )
+        // Park only once the item is really under way: a failed composition
+        // leaves no RPH surface, and the retry must replay the AP as today.
+        if started {
+            parkedCharacter = ParkedCharacter(style: ReactionStyle.standard, returnPoseID: endPoseID, forRotation: true)
         }
         return started
     }
@@ -3289,8 +3866,16 @@ public final class SnoopySceneView: NSView {
     public func resume() {
         guard isPaused else { return }
         isPaused = false
-        let pausedFor = ProcessInfo.processInfo.systemUptime - pauseStartedAt
+        let now = ProcessInfo.processInfo.systemUptime
+        let pausedFor = now - pauseStartedAt
         if let startedAt = idleSceneStartedAt { idleSceneStartedAt = startedAt + pausedFor }
+        // A pause must not silently expire a pending reaction trigger. Only
+        // the paused time after the fire is excluded: an event fired during
+        // the pause (the interval timer keeps running) is fresh as of now,
+        // never dated in the future.
+        if let firedAt = pendingReactionTrigger?.firedAt {
+            pendingReactionTrigger?.firedAt = min(firedAt + pausedFor, now)
+        }
         let rate = Float(playbackRate)
         for candidate in pausedPlayers {
             candidate.defaultRate = rate
@@ -3336,6 +3921,45 @@ public final class SnoopySceneView: NSView {
     public func skipToPreviousScene() {
         guard let previous = previousIdleSceneID else { return }
         jumpToScene(previous, reason: "previous scene requested")
+    }
+
+    // MARK: - Reactions (host API)
+
+    /// Fire a reaction trigger (a `ReactionTrigger` token such as "doorbell"),
+    /// like tvOS's `reactionTriggerEvent`. It is consumed at the next
+    /// character boundary of an idle scene while still fresh (30 s, paused
+    /// time excluded); a newer trigger replaces a pending one, and a consumed
+    /// one is never replayed. Unknown tokens are accepted and can only be
+    /// answered by a generic hold. Main thread.
+    public func triggerReaction(_ trigger: String) {
+        fireReactionTrigger(trigger, source: "host")
+    }
+
+    /// The trigger waiting to be consumed (nil once consumed or expired). The
+    /// freshness test is the one the boundary consumer applies; a pause
+    /// freezes the age the way `resume()` will account for it.
+    public var pendingReactionTriggerName: String? {
+        guard let event = pendingReactionTrigger else { return nil }
+        let now = isPaused ? pauseStartedAt : ProcessInfo.processInfo.systemUptime
+        return now - event.firedAt <= Self.reactionTriggerTimeout ? event.trigger : nil
+    }
+
+    /// The triggers a host can fire and the loaded index can answer: the
+    /// tokens of every `characterReactionPose` whose style is enterable from
+    /// some base or additional pose, in `ReactionTrigger.all` order (unknown
+    /// tokens last). `generic` is a fallback tag on the holds, not a trigger,
+    /// so it is never listed. Empty on a V1-only index, where reactions are
+    /// not available.
+    public var availableReactionTriggers: [String] {
+        guard let graph = playbackGraph else { return [] }
+        let origins = graph.assetsByID.values.filter {
+            $0.kind == "characterBasePose" || $0.kind == "characterAdditionalPose"
+        }
+        let styles = Set(origins.flatMap { graph.supportedReactionStyles(from: $0.id) })
+        let triggers = Set(styles.flatMap { graph.reactionPoses(style: $0).flatMap(\.reactionTriggers) })
+            .subtracting([ReactionTrigger.generic])
+        let known = ReactionTrigger.all.filter(triggers.contains)
+        return known + triggers.subtracting(known).sorted()
     }
 
     private func jumpToScene(_ forcedID: String?, reason: String) {

@@ -16,6 +16,10 @@ struct StatusPanelView: View {
             Divider()
             sceneSection
             Divider()
+            if !model.reactionTriggers.isEmpty {
+                reactionsSection
+                Divider()
+            }
             speedSection
             Divider()
             powerSection
@@ -83,6 +87,48 @@ struct StatusPanelView: View {
                 }
             }
         }
+    }
+
+    private var reactionsSection: some View {
+        let triggers = model.reactionTriggers
+        let split = (triggers.count + 1) / 2
+        return VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Reactions")
+            // One row when the titles fit the card; five regular-size buttons
+            // are wider than it, so fall back to two rows rather than
+            // shrinking the controls.
+            ViewThatFits(in: .horizontal) {
+                reactionButtons(triggers[...])
+                VStack(alignment: .leading, spacing: 8) {
+                    reactionButtons(triggers[..<split])
+                    reactionButtons(triggers[split...])
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(!model.isEnabled)
+            Text(reactionCaption).font(.callout).foregroundStyle(.secondary)
+        }
+    }
+
+    private func reactionButtons(_ triggers: ArraySlice<String>) -> some View {
+        HStack(spacing: 8) {
+            ForEach(triggers, id: \.self) { trigger in
+                Button(Self.reactionTitle(trigger)) { model.react(trigger) }
+            }
+        }
+    }
+
+    private var reactionCaption: String {
+        if let pending = model.pendingReactionTrigger {
+            return "\(Self.reactionTitle(pending)) queued for his next pause"
+        }
+        return "Snoopy reacts at his next pause"
+    }
+
+    /// "doorbell" → "Doorbell".
+    private static func reactionTitle(_ trigger: String) -> String {
+        guard let first = trigger.first else { return trigger }
+        return first.uppercased() + trigger.dropFirst()
     }
 
     private var speedSection: some View {

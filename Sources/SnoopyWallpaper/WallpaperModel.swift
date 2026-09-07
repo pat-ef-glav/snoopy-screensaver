@@ -27,6 +27,10 @@ final class WallpaperModel: ObservableObject {
     @Published private(set) var currentThumbnail: NSImage?
     @Published private(set) var upcoming: [SceneChoice] = []
     @Published private(set) var canGoBack = false
+    /// The panel's reaction buttons, in `ReactionTrigger.all` order; empty
+    /// when the loaded index has no reaction clips.
+    @Published private(set) var reactionTriggers: [String] = []
+    @Published private(set) var pendingReactionTrigger: String?
 
     let hasBattery = PowerMonitor.hasBattery
     let launchAtLoginAvailable = LaunchAtLogin.isAvailable
@@ -55,7 +59,17 @@ final class WallpaperModel: ObservableObject {
         pauseWhenHidden = SnoopyPreferences.pauseWhenHidden
         launchAtLogin = launchAtLoginAvailable && LaunchAtLogin.isEnabled
         weatherText = Self.describeWeather()
+        reactionTriggers = Self.panelReactionTriggers(controller.availableReactionTriggers)
+        pendingReactionTrigger = controller.pendingReactionTrigger
         refreshScenes()
+    }
+
+    /// The named triggers the index can answer, in `ReactionTrigger.all`
+    /// order. `generic` is a fallback tag on the holds, not a trigger to fire,
+    /// and a token the panel has no title for is left out.
+    private static func panelReactionTriggers(_ available: [String]) -> [String] {
+        let available = Set(available)
+        return ReactionTrigger.all.filter { $0 != ReactionTrigger.generic && available.contains($0) }
     }
 
     private func refreshScenes() {
@@ -168,6 +182,11 @@ final class WallpaperModel: ObservableObject {
 
     func previousScene() {
         controller.previousScene()
+        refresh()
+    }
+
+    func react(_ trigger: String) {
+        controller.react(trigger)
         refresh()
     }
 

@@ -36,6 +36,7 @@ window style, like Klack or Little Snitch) that stays open while you use it:
 |---|---|
 | Header | "Snoopy", the status line (Playing on 2 displays / Paused: on battery / Off) and the master switch. Off hides the windows; the system wallpaper shows. |
 | Scene | A thumbnail of the room currently on screen with its id, **Previous** / **Next Scene** (the next character segment is drawn in another room, swapped in like any segment change), a restart button, and "Up next, by chance": the three most likely next rooms with their share of the weighted draw under the current context. |
+| Reactions | **Doorbell** / **Alarm** / **Music** / **Environment** / **Presence** fire a reaction trigger on every display, the way a tvOS app fires `reactionTriggerEvent`: at his next pause between animations (within 30 s of playing time) Snoopy plays a reaction pose tagged for that trigger, then returns to his base pose. The caption names the queued trigger; a newer one replaces it. The row only appears when the asset index carries the reaction clips (bundle `idlechara_defaultV2_v1`). |
 | Speeds | Sliders for the wallpaper and the screen saver, 0.5× … 2× in quarter steps. Video players run at that rate and the HEIC frame clock is scaled; scene budgets and visitor schedules stay in wall time, as on tvOS. |
 | On Battery | *Keep playing*, *Pause*, or *Pause when battery is low* (< 20 %); hidden on desktops. |
 | Pause When Covered by Windows | Polls window coverage once a second (Aerial's algorithm: 50×50 grid, threshold 60 %) and pauses that display while it is mostly covered. |
@@ -127,3 +128,16 @@ This is the recipe Aerial's desktop mode and other wallpaper apps use.
 6. The menu says "Playing" but nothing moves: pick *Restart Snoopy*, then send the log lines
    around "paused", "resumed", "recreating the display link" or "no playback progress" — the
    engine logs each recovery step it takes.
+
+## Testing the engine
+
+The scene view reads a few environment variables meant for development (semantics in
+`docs/REACTION_POSES.md` §5). They only reach the app when it is started from a shell —
+`SNOOPY_REACTION_TRIGGER=doorbell .build/SnoopyWallpaper.app/Contents/MacOS/SnoopyWallpaper` —
+so quit the installed copy first; two instances fight over the desktop.
+
+- `SNOOPY_REACTION_TRIGGER=<trigger>` — arms one simulated trigger for the first idle scene, fired at its second character boundary so it cannot expire during the opening active scene.
+- `SNOOPY_REACTION_INTERVAL_SECONDS=<n>` — fires a random trigger every *n* seconds (minimum 1).
+- `SNOOPY_FORCE_REACTION_ID=<id>` — pins the reaction pose (for example `103_RPH002`) instead of drawing one for the trigger.
+- `SNOOPY_DISABLE_REACTION_HOLD=1` — during a scene transition keep the old freeze on the enter's last frame instead of holding in `101_RPH_Loop`.
+- `SNOOPY_ASSET_INDEX_PATH=<file>` — play from another asset index (development only; the media paths in it must resolve).
