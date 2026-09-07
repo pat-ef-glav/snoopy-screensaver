@@ -4363,10 +4363,19 @@ public final class SnoopySceneView: NSView {
             let last = CMTimeSubtract(duration, CMTime(value: 1, timescale: 48))
             if CMTimeCompare(last, .zero) > 0, CMTimeCompare(requested, last) > 0 { requested = last }
         }
-        if let image = try? generator.copyCGImage(at: requested, actualTime: nil) { return image }
-        generator.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: 600)
-        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: 600)
-        return try? generator.copyCGImage(at: requested, actualTime: nil)
+        do {
+            return try generator.copyCGImage(at: requested, actualTime: nil)
+        } catch {
+            generator.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: 600)
+            generator.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: 600)
+            do {
+                return try generator.copyCGImage(at: requested, actualTime: nil)
+            } catch let retryError {
+                NSLog("SnoopyTVScreenSaver: preview frame failed at %.3fs max=%d: %@ / retry: %@",
+                      requested.seconds, maxPixelSize, error.localizedDescription, retryError.localizedDescription)
+                return nil
+            }
+        }
     }
 
     // MARK: - Host clock (for hosts that are not a ScreenSaverView)

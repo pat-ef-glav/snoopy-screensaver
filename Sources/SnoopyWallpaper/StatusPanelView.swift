@@ -210,19 +210,22 @@ struct StatusPanelView: View {
 
     private var preview: some View {
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        // The whole frame, at the display's own aspect ratio: cropping to a
+        // fixed height cut Snoopy off the top of tall rooms.
         return Group {
             if let image = model.previewImage {
                 Image(nsImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: contentWidth)
             } else {
                 ZStack {
                     shape.fill(.quaternary)
                     Image(systemName: "photo").font(.title3).foregroundStyle(.tertiary)
                 }
+                .frame(width: contentWidth, height: previewHeight)
             }
         }
-        .frame(width: contentWidth, height: previewHeight)
         .clipShape(shape)
     }
 }

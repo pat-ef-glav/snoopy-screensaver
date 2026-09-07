@@ -67,16 +67,48 @@ final class WallpaperAppDelegate: NSObject, NSApplicationDelegate {
             let wasVisible = model.panelVisible
             model.setPanelVisible(true)
             model.refresh()
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            // The first live frame of a 4K video can take a few seconds to
+            // decode; wait for it (bounded) so the render is not a placeholder.
+            for _ in 0..<16 where model.previewImage == nil {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                model.refresh()
+            }
+            // The first frame can predate the character's preroll; let the
+            // panel's own 2 s clock fetch a settled one.
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
             model.refresh()
-            let renderer = ImageRenderer(
-                content: StatusPanelView(model: model).background(Color(nsColor: .windowBackgroundColor))
+            // An AppKit hosting view in an offscreen window draws the real
+            // controls (SwiftUI's ImageRenderer draws switches as placeholders).
+            let hosting = NSHostingView(
+                rootView: StatusPanelView(model: model).background(Color(nsColor: .windowBackgroundColor))
             )
-            renderer.scale = 2
-            if let image = renderer.nsImage {
+            hosting.frame = NSRect(x: 0, y: 0, width: 340, height: 10)
+            hosting.frame = NSRect(origin: .zero, size: hosting.fittingSize)
+            let window = NSWindow(contentRect: hosting.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.contentView = hosting
+            // Controls only take their bound state once the window server has
+            // displayed them, so the window is put on screen, practically
+            // invisible, for the render.
+            window.alphaValue = 0.01
+            window.level = .floating
+            window.ignoresMouseEvents = true
+            if let screen = NSScreen.main {
+                window.setFrameOrigin(NSPoint(x: screen.visibleFrame.minX, y: screen.visibleFrame.minY))
+            }
+            window.orderFrontRegardless()
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            hosting.layoutSubtreeIfNeeded()
+            hosting.displayIfNeeded()
+            if let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) {
+                hosting.cacheDisplay(in: hosting.bounds, to: rep)
+                let image = NSImage(size: hosting.bounds.size)
+                image.addRepresentation(rep)
                 Self.writePNG(image, to: directory.appendingPathComponent("panel.png"))
             }
-            if !wasVisible { model.setPanelVisible(false) }
+            window.orderOut(nil)
+            window.close()
+            model.setPanelVisible(wasVisible)
             for (displayID, scene) in controller.playingScenes {
                 scene.makePreviewImage(maxPixelSize: 1920) { cgImage in
                     guard let cgImage else { return }
@@ -86,6 +118,32 @@ final class WallpaperAppDelegate: NSObject, NSApplicationDelegate {
             }
             NSLog("SnoopyWallpaper: screenshots written to %@", directory.path)
         }
+    }
+
+    private static func renderLayerTree(of view: NSView, scale: CGFloat) -> NSImage? {
+        view.wantsLayer = true
+        guard let layer = view.layer else { return nil }
+        let size = view.bounds.size
+        guard size.width > 0, size.height > 0,
+              let rep = NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale), pixelsHigh: Int(size.height * scale),
+                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+              ),
+              let context = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        let cgContext = context.cgContext
+        cgContext.scaleBy(x: scale, y: scale)
+        if view.isFlipped {
+            cgContext.translateBy(x: 0, y: size.height)
+            cgContext.scaleBy(x: 1, y: -1)
+        }
+        layer.render(in: cgContext)
+        NSGraphicsContext.restoreGraphicsState()
+        let image = NSImage(size: size)
+        image.addRepresentation(rep)
+        return image
     }
 
     private static func writePNG(_ image: NSImage, to url: URL) {
