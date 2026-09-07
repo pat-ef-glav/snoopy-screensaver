@@ -365,14 +365,19 @@ final class SelectionTests: XCTestCase {
     func testAllAuthoredCharacterFilenamesAgreeWithPoseMetadata() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let index = try JSONDecoder().decode(
-            AssetIndex.self, from: Data(contentsOf: root.appendingPathComponent("Resources/asset-index.json"))
-        )
+        // SNOOPY_TEST_ASSET_INDEX points the test at another index of the same
+        // schema (for example one regenerated with the V2 bundle) without
+        // touching the shipped Resources/asset-index.json.
+        let indexURL = ProcessInfo.processInfo.environment["SNOOPY_TEST_ASSET_INDEX"]
+            .map { URL(fileURLWithPath: $0) } ?? root.appendingPathComponent("Resources/asset-index.json")
+        let index = try JSONDecoder().decode(AssetIndex.self, from: Data(contentsOf: indexURL))
         let assets = index.assets
         let additional = assets.filter { $0.kind == "characterAdditionalPose" }
         let moments = assets.filter { $0.kind == "characterMoment" }
         let bridges = assets.filter { $0.kind == "characterPoseTransition" }
-        let reactions = assets.filter { $0.kind == "characterReactionTransitionPose" }
+        // V1 reaction transitions carry no reactionStyleID. The V2 bundle adds
+        // styled records on top of them and is checked separately below.
+        let reactions = assets.filter { $0.kind == "characterReactionTransitionPose" && $0.reactionStyleID == nil }
         XCTAssertEqual(additional.count, 31)
         XCTAssertEqual(moments.count, 42)
         XCTAssertEqual(bridges.count, 12)
@@ -392,12 +397,62 @@ final class SelectionTests: XCTestCase {
         let graph = PlaybackGraph(assets: assets)
         let baseIDs = assets.filter { $0.kind == "characterBasePose" }.map(\.id)
         for start in baseIDs {
-            XCTAssertNotNil(graph.idleExitSequence(from: start), start)
+            // The default style must resolve to the V1 HEIC clips whether or
+            // not the V2 bundle is present.
+            XCTAssertEqual(graph.idleExitSequence(from: start)?.assets.map(\.id), ["\(start)_To_RPH"], start)
+            XCTAssertEqual(graph.idleExitSequence(from: start)?.endPoseID, "RPH", start)
             for action in additional + moments {
                 XCTAssertNotNil(graph.actionSequence(currentPoseID: start, target: action), "\(start) -> \(action.id)")
             }
         }
-        for target in baseIDs { XCTAssertNotNil(graph.idleEntrySequence(to: target), target) }
+        for target in baseIDs {
+            XCTAssertEqual(graph.idleEntrySequence(to: target)?.assets.map(\.id),
+                           ["101_RPH_To_\(shortPose(target))", target], target)
+            XCTAssertEqual(graph.idleEntrySequence(to: target)?.startPoseID, "RPH", target)
+        }
+
+        // The V2 bundle (tvOS 26.5 DefaultAssetBundleV2) is optional in the
+        // index; when present, its style families must be complete.
+        let v2 = assets.filter { $0.bundle == "idlechara_defaultV2_v1" }
+        guard !v2.isEmpty else { return }
+        XCTAssertEqual(v2.count, 44)
+        let v2Transitions = v2.filter { $0.kind == "characterReactionTransitionPose" }
+        let v2Poses = v2.filter { $0.kind == "characterReactionPose" }
+        // 4 BP->RPD, 5 AP->RPD, 5 AP->RPH, 3 AP->RWH, 3 AP->RWD (docs/REACTION_POSES.md section 4).
+        XCTAssertEqual(v2Transitions.filter { $0.phase?.kind == "enter" }.count, 20)
+        XCTAssertEqual(v2Transitions.filter { $0.phase?.kind == "exit" }.count, 12)
+        XCTAssertEqual(v2Poses.count, 12)
+        let animationIDs = Set(baseIDs + additional.map(\.id))
+        for asset in v2Transitions {
+            XCTAssertTrue(ReactionStyle.all.contains(asset.reactionStyleID ?? ""), asset.id)
+            switch asset.phase?.kind {
+            case "enter":
+                XCTAssertTrue(animationIDs.contains(asset.phase?.startCharacterPoseID ?? ""), asset.id)
+            case "exit":
+                XCTAssertTrue(baseIDs.contains(asset.phase?.endCharacterPoseID ?? ""), asset.id)
+            default:
+                XCTFail("\(asset.id) has neither an enter nor an exit phase")
+            }
+        }
+        for pose in v2Poses {
+            XCTAssertTrue(ReactionStyle.all.contains(pose.reactionStyleID ?? ""), pose.id)
+            XCTAssertFalse(pose.reactionTriggers.isEmpty, pose.id)
+            XCTAssertTrue(pose.reactionTriggers.allSatisfy(ReactionTrigger.all.contains), pose.id)
+        }
+        for base in baseIDs {
+            XCTAssertNotNil(graph.reactionEnter(from: base, style: ReactionStyle.alternate), base)
+            for style in ReactionStyle.all {
+                XCTAssertNotNil(graph.reactionExit(to: base, style: style), "\(base) <- \(style)")
+            }
+        }
+        XCTAssertEqual(graph.supportedReactionStyles(from: "103_AP021"),
+                       [ReactionStyle.alternateWithCompanion, ReactionStyle.standardWithCompanion])
+        XCTAssertEqual(graph.supportedReactionStyles(from: "101_AP001"),
+                       [ReactionStyle.alternate, ReactionStyle.standard])
+        let doorbell = try XCTUnwrap(graph.assetsByID["101_RPD001"])
+        XCTAssertEqual(graph.reactionSequence(from: "101_BP001", pose: doorbell, to: "101_BP002")?.assets.map(\.id),
+                       ["101_BP001_To_RPD", "101_RPD001", "101_RPD_To_BP002", "101_BP002"])
+        XCTAssertEqual(graph.reactionHold(style: ReactionStyle.standard)?.id, "101_RPH_Loop")
     }
 
     func testSessionBagDoesNotRepeatBeforeExhaustionAndLoopRangeIsFiveToTen() {

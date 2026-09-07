@@ -57,9 +57,15 @@ public struct RelevancyScorer: Sendable {
             if matched[family] == nil {
                 order.append(family)
                 matched[family] = false
-                weights[family] = specificity(clauses)
             }
-            if matches(clauses, context: context) { matched[family] = true }
+            // A family weighs what its matching clause weighs. For every V1
+            // family the specificity depends on the keys alone, so this is
+            // the weight of the family's first clause as before; only the
+            // `reactionTrigger` family weighs a specific match above `generic`.
+            if matches(clauses, context: context) {
+                matched[family] = true
+                weights[family] = max(weights[family] ?? 0, specificity(clauses))
+            }
         }
         guard !order.isEmpty else { return nil }
         var total = 0
@@ -72,6 +78,17 @@ public struct RelevancyScorer: Sendable {
 
     private func matches(_ clauses: [String: JSONValue], context: SelectionContext) -> Bool {
         clauses.allSatisfy { key, value in
+            // IdleCharacterUI's ReactionTriggerBooster: a pose tagged with
+            // the pending trigger matches, a `generic` pose "may generically
+            // apply" to any pending trigger, and while no trigger is
+            // pending every tagged pose is fully deboosted. Evaluated before
+            // the object check so a flat `{reactionTrigger: "doorbell"}`
+            // clause cannot slip through as an unconditional match.
+            if key == "reactionTrigger" {
+                guard let trigger = context.reactionTrigger else { return false }
+                let expectedValues = tokens(in: value, fallbackKey: key)
+                return expectedValues.contains(trigger) || expectedValues == [ReactionTrigger.generic]
+            }
             guard let object = value.objectValue else { return true }
             return object.allSatisfy { field, expected in
                 let expectedValues = tokens(in: expected, fallbackKey: field)
@@ -113,7 +130,17 @@ public struct RelevancyScorer: Sendable {
     private func specificity(_ clauses: [String: JSONValue]) -> Int {
         clauses.reduce(0) { partial, item in
             let weight: Int
-            switch item.key { case "calendar": weight = 80; case "hourlyEvent": weight = 65; case "weather", "moonPhase", "moon": weight = 50; case "timeOfDay": weight = 30; case "routine": weight = 25; default: weight = 10 }
+            switch item.key {
+            case "calendar": weight = 80
+            case "hourlyEvent": weight = 65
+            case "weather", "moonPhase", "moon": weight = 50
+            case "timeOfDay": weight = 30
+            case "routine": weight = 25
+            // reactionTriggerSpecificBoost above reactionTriggerGenericBoost.
+            case "reactionTrigger":
+                weight = tokens(in: item.value, fallbackKey: item.key) == [ReactionTrigger.generic] ? 20 : 60
+            default: weight = 10
+            }
             return partial + weight
         }
     }

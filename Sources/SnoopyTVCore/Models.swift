@@ -63,6 +63,10 @@ public struct AssetRecord: Codable, Sendable, Identifiable {
     public let parentIdleSceneIDs: [String]?
     public let idleScene: IdleSceneRecord?
     public let visitor: VisitorRecord?
+    /// `reactionStyleID` of the V2 `characterReactionPose` and
+    /// `characterReactionTransitionPose` records (see `ReactionStyle`). V1
+    /// reaction transitions carry none and belong to the standard style.
+    public let reactionStyleID: String?
 
     public init(id: String, bundle: String? = nil, relativePath: String? = nil, path: String? = nil,
                 metadataType: String? = nil, type: String? = nil, status: JSONValue? = nil,
@@ -72,7 +76,8 @@ public struct AssetRecord: Codable, Sendable, Identifiable {
                 transitionPhase: String? = nil, transitionCategoryIDs: [String]? = nil,
                 transitionPair: TransitionPairRecord? = nil, transitionCategory: TransitionCategoryRecord? = nil,
                 scenePalette: ScenePaletteRecord? = nil, parentIdleSceneIDs: [String]? = nil,
-                idleScene: IdleSceneRecord? = nil, visitor: VisitorRecord? = nil) {
+                idleScene: IdleSceneRecord? = nil, visitor: VisitorRecord? = nil,
+                reactionStyleID: String? = nil) {
         self.id = id
         self.bundle = bundle
         self.relativePath = relativePath
@@ -95,6 +100,7 @@ public struct AssetRecord: Codable, Sendable, Identifiable {
         self.parentIdleSceneIDs = parentIdleSceneIDs
         self.idleScene = idleScene
         self.visitor = visitor
+        self.reactionStyleID = reactionStyleID
     }
 
     public var assetPath: String { relativePath ?? path ?? id }
@@ -104,6 +110,78 @@ public struct AssetRecord: Codable, Sendable, Identifiable {
         if case .array(let values) = info { return !values.isEmpty }
         return false
     }
+
+    /// The trigger tokens authored on a `characterReactionPose`
+    /// (`relevancyData.info[].reactionTrigger.reactionTrigger`), in authored order.
+    public var reactionTriggers: [String] {
+        guard let info = relevancyData?.objectValue?["info"], case .array(let entries) = info else { return [] }
+        return entries.flatMap { entry -> [String] in
+            guard let clause = entry.objectValue?["reactionTrigger"] else { return [] }
+            return Self.triggerTokens(in: clause.objectValue?["reactionTrigger"] ?? clause)
+        }
+    }
+
+    /// The generic `_Loop` hold of a style: a short stay in the reaction pose
+    /// that "may generically apply" to any trigger.
+    public var isReactionHold: Bool {
+        kind == "characterReactionPose" && reactionTriggers == [ReactionTrigger.generic]
+    }
+
+    private static func triggerTokens(in value: JSONValue) -> [String] {
+        switch value {
+        case .string(let token): return [token]
+        case .array(let values): return values.flatMap(triggerTokens(in:))
+        case .object(let object): return object.keys.sorted()
+        default: return []
+        }
+    }
+}
+
+/// The four `reactionStyleID` values of the V2 reaction clips. A style is a
+/// closed family: the enter, the reaction pose and the exit all carry the same
+/// id. V1 records carry no id and belong to the standard style
+/// (`CharacterReactionPoseDefaultStyleID` in IdleCharacterCore).
+public enum ReactionStyle {
+    /// RPH: Snoopy seated, facing the viewer (the V1 reaction pose).
+    public static let standard = "standardReactionTransitionStyleID"
+    /// RPD: Snoopy seated in profile, facing right.
+    public static let alternate = "alternateReactionTransitionStyleID"
+    /// RWH: as RPH, with Woodstock present during the reaction.
+    public static let standardWithCompanion = "standardWithCompanionReactionTransitionStyleID"
+    /// RWD: as RPD, with Woodstock present during the reaction.
+    public static let alternateWithCompanion = "alternateWithCompanionReactionTransitionStyleID"
+
+    public static let defaultStyle = standard
+    public static let all: [String] = [standard, alternate, standardWithCompanion, alternateWithCompanion]
+
+    public static func isCompanion(_ style: String) -> Bool {
+        style == standardWithCompanion || style == alternateWithCompanion
+    }
+
+    /// The filename code of a style, used as the graph node between an enter
+    /// and an exit (`101_BP001_To_RPH` -> `RPH` -> `101_RPH_To_BP002`).
+    public static func nodeID(for style: String) -> String {
+        switch style {
+        case standard: return "RPH"
+        case alternate: return "RPD"
+        case standardWithCompanion: return "RWH"
+        case alternateWithCompanion: return "RWD"
+        default: return style
+        }
+    }
+}
+
+/// The `reactionTrigger` tokens of `characterReactionPose.relevancyData.info`.
+public enum ReactionTrigger {
+    public static let doorbell = "doorbell"
+    public static let alarm = "alarm"
+    public static let music = "music"
+    public static let environment = "environment"
+    public static let presence = "presence"
+    /// A pose that "may generically apply" to any trigger (the `_Loop` holds).
+    public static let generic = "generic"
+
+    public static let all: [String] = [doorbell, alarm, music, environment, presence, generic]
 }
 
 public struct SpriteRecord: Codable, Sendable {
@@ -310,12 +388,17 @@ public struct SelectionContext: Sendable, Equatable {
     /// character actions whose relevancy metadata depends on, or excludes,
     /// `sceneFullscreenEffectVisitor`.
     public var activeCategories: Set<String>
+    /// The pending reaction trigger (`ReactionTrigger`), if one is fresh.
+    /// tvOS keeps a `reactionTriggerEvent` that expires; while it is nil
+    /// every tagged `characterReactionPose` is ineligible.
+    public var reactionTrigger: String?
 
     public init(date: Date = .now, calendarIdentifier: Calendar.Identifier = .gregorian, timeOfDay: String? = nil,
                 routine: String? = nil, routineConditions: Set<String> = [],
                 weatherConditions: Set<String> = [], calendarEvents: Set<String> = [],
                 hourlyEvents: Set<String> = [], moonPhases: Set<String> = [], fulfilledDependencies: Set<String> = [],
-                excludedValues: Set<String> = [], activeCategories: Set<String> = []) {
+                excludedValues: Set<String> = [], activeCategories: Set<String> = [],
+                reactionTrigger: String? = nil) {
         self.date = date
         self.calendarIdentifier = calendarIdentifier
         self.timeOfDay = timeOfDay
@@ -328,6 +411,7 @@ public struct SelectionContext: Sendable, Equatable {
         self.fulfilledDependencies = fulfilledDependencies
         self.excludedValues = excludedValues
         self.activeCategories = activeCategories
+        self.reactionTrigger = reactionTrigger
     }
 }
 

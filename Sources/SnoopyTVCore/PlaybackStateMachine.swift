@@ -302,39 +302,114 @@ public struct PlaybackGraph: Sendable {
         return CharacterPlaybackSequence(startPoseID: currentPoseID, endPoseID: end, assets: assets)
     }
 
-    /// ST Hide finishes in the shared reaction pose. The authored RPH exit
-    /// and target BP are inseparable when entering an IdleScene.
-    public func idleEntrySequence(to targetPoseID: String) -> CharacterPlaybackSequence? {
-        guard let exit = reactionExit(to: targetPoseID),
+    /// ST Hide finishes in the reaction pose of one style (RPH by default).
+    /// The authored exit and target BP are inseparable when entering an
+    /// IdleScene.
+    public func idleEntrySequence(
+        to targetPoseID: String, style: String = ReactionStyle.defaultStyle
+    ) -> CharacterPlaybackSequence? {
+        guard let exit = reactionExit(to: targetPoseID, style: style),
               let basePose = assetsByID[targetPoseID], basePose.kind == "characterBasePose" else { return nil }
-        return CharacterPlaybackSequence(startPoseID: "RPH", endPoseID: targetPoseID,
+        return CharacterPlaybackSequence(startPoseID: ReactionStyle.nodeID(for: style), endPoseID: targetPoseID,
                                          assets: [exit, basePose])
     }
 
-    /// Before ST Reveal, the current BP must enter the shared reaction pose.
-    public func idleExitSequence(from currentPoseID: String) -> CharacterPlaybackSequence? {
-        guard let enter = reactionEnter(from: currentPoseID) else { return nil }
-        return CharacterPlaybackSequence(startPoseID: currentPoseID, endPoseID: "RPH", assets: [enter])
+    /// Before ST Reveal, the current BP (or an AP loop, through a V2
+    /// `AP_To_R**` shortcut) must enter the reaction pose of the chosen style.
+    public func idleExitSequence(
+        from currentPoseID: String, style: String = ReactionStyle.defaultStyle
+    ) -> CharacterPlaybackSequence? {
+        guard let enter = reactionEnter(from: currentPoseID, style: style) else { return nil }
+        return CharacterPlaybackSequence(startPoseID: currentPoseID, endPoseID: ReactionStyle.nodeID(for: style),
+                                         assets: [enter])
     }
 
-    public func reactionQueue(from startID: String, to endID: String) -> [AssetRecord]? {
-        guard let enter = reactionEnter(from: startID), let exit = reactionExit(to: endID) else { return nil }
+    public func reactionQueue(
+        from startID: String, to endID: String, style: String = ReactionStyle.defaultStyle
+    ) -> [AssetRecord]? {
+        guard let enter = reactionEnter(from: startID, style: style),
+              let exit = reactionExit(to: endID, style: style) else { return nil }
         return [enter, exit]
     }
 
-    public func reactionEnter(from poseID: String) -> AssetRecord? {
-        assetsByID.values.first {
-            $0.kind == "characterReactionTransitionPose"
-                && $0.phase?.kind == "enter"
-                && $0.phase?.startCharacterPoseID == poseID
-        }
+    /// The style family a reaction record belongs to. V1 records carry no
+    /// `reactionStyleID` and are the standard (RPH) style.
+    public func reactionStyle(of asset: AssetRecord) -> String {
+        asset.reactionStyleID ?? ReactionStyle.defaultStyle
     }
 
-    public func reactionExit(to poseID: String) -> AssetRecord? {
-        assetsByID.values.first {
+    /// The enter clip that leaves `poseID` (a BP, or an AP loop through the
+    /// V2 shortcut) for the reaction pose of `style`. Candidates are resolved
+    /// by id so the choice never depends on dictionary order.
+    public func reactionEnter(from poseID: String, style: String = ReactionStyle.defaultStyle) -> AssetRecord? {
+        reactionTransitions(phase: "enter", style: style)
+            .filter { $0.phase?.startCharacterPoseID == poseID }
+            .min { $0.id < $1.id }
+    }
+
+    /// The exit clip that returns from the reaction pose of `style` to `poseID`.
+    public func reactionExit(to poseID: String, style: String = ReactionStyle.defaultStyle) -> AssetRecord? {
+        reactionTransitions(phase: "exit", style: style)
+            .filter { $0.phase?.endCharacterPoseID == poseID }
+            .min { $0.id < $1.id }
+    }
+
+    /// The styles with an authored enter from `animationID`, sorted. The
+    /// companion styles exist only from the APs in which Woodstock is already
+    /// on screen; no BP can enter them.
+    public func supportedReactionStyles(from animationID: String) -> [String] {
+        let styles = assetsByID.values.filter {
             $0.kind == "characterReactionTransitionPose"
-                && $0.phase?.kind == "exit"
-                && $0.phase?.endCharacterPoseID == poseID
+                && $0.phase?.kind == "enter"
+                && $0.phase?.startCharacterPoseID == animationID
+        }.map(reactionStyle(of:))
+        return Array(Set(styles)).sorted()
+    }
+
+    /// Every `characterReactionPose` of one style, by id.
+    public func reactionPoses(style: String = ReactionStyle.defaultStyle) -> [AssetRecord] {
+        assetsByID.values
+            .filter { $0.kind == "characterReactionPose" && reactionStyle(of: $0) == style }
+            .sorted { $0.id < $1.id }
+    }
+
+    /// The poses of a style that answer `trigger`: those tagged with it first,
+    /// then the generic holds that "may generically apply" to any trigger.
+    public func reactionPoses(style: String = ReactionStyle.defaultStyle, trigger: String) -> [AssetRecord] {
+        let poses = reactionPoses(style: style)
+        // The same generic rule as RelevancyScorer: only a pose tagged
+        // exactly `generic` (the `_Loop` holds) answers any trigger.
+        let specific = poses.filter { $0.reactionTriggers.contains(trigger) }
+        let generic = poses.filter { !$0.reactionTriggers.contains(trigger) && $0.isReactionHold }
+        return specific + generic
+    }
+
+    /// The generic `_Loop` hold of a style, when one was authored.
+    public func reactionHold(style: String = ReactionStyle.defaultStyle) -> AssetRecord? {
+        reactionPoses(style: style).first(where: \.isReactionHold)
+    }
+
+    /// A complete reaction in the style of `pose`: `enter -> pose -> exit -> BP`,
+    /// the queue tvOS builds ("A reactionPose was queued for %s, skipping
+    /// standard idle animation"). From an AP the V2 shortcut enter is used.
+    /// Nil when any clip is missing or the target is not a base pose.
+    public func reactionSequence(
+        from currentAnimationID: String, pose: AssetRecord, to targetPoseID: String
+    ) -> CharacterPlaybackSequence? {
+        guard pose.kind == "characterReactionPose" else { return nil }
+        let style = reactionStyle(of: pose)
+        guard let enter = reactionEnter(from: currentAnimationID, style: style),
+              let exit = reactionExit(to: targetPoseID, style: style),
+              let basePose = assetsByID[targetPoseID], basePose.kind == "characterBasePose" else { return nil }
+        return CharacterPlaybackSequence(startPoseID: currentAnimationID, endPoseID: targetPoseID,
+                                         assets: [enter, pose, exit, basePose])
+    }
+
+    private func reactionTransitions(phase: String, style: String) -> [AssetRecord] {
+        assetsByID.values.filter {
+            $0.kind == "characterReactionTransitionPose"
+                && $0.phase?.kind == phase
+                && reactionStyle(of: $0) == style
         }
     }
 
