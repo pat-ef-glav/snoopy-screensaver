@@ -206,9 +206,11 @@ stays out of git) and indexed as bundle `idlechara_defaultV2_v1`. New record key
   consumed or older than 30 s) and `availableReactionTriggers` (the fireable triggers the loaded
   index can answer, without `generic`; empty on a V1-only index).
 
-The wallpaper app's status panel exposes the five triggers (Doorbell, Alarm, Music, Environment,
-Presence) in a "Reactions" row so the clips can be seen on demand; the row is hidden when the
-index has no reaction clips.
+The wallpaper app does not expose triggers in its panel (they were tried and removed: a trigger
+acts only at the next character boundary of an idle scene and expires after 30 s, which makes a
+button feel broken). Hosts can still call `triggerReaction(_:)`, and the environment variables
+above exercise every path; `SNOOPY_REACTION_INTERVAL_SECONDS` is the way to see the clips in
+normal playback.
 
 ## 6. Verification (2026-09-07)
 

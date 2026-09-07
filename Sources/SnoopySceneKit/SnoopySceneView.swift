@@ -2,6 +2,7 @@ import AVFoundation
 import Cocoa
 import CoreVideo
 import ImageIO
+import Network
 #if canImport(SnoopyTVCore)
 import SnoopyTVCore // Swift package build; the Xcode target compiles the core sources directly
 #endif
@@ -143,6 +144,23 @@ public final class SnoopySceneView: NSView {
     private var startupFadeView: NSView?
     private var startupFadeHasBegun = false
     private var weatherRefreshTask: Task<Void, Never>?
+    /// Weather self-healing (`refreshWeatherIfNeeded`): the uptime of the last
+    /// failed attempt (nil after a success), a generation so a cancelled task
+    /// can never clear its successor's in-flight marker, and the network path
+    /// monitor whose `.satisfied` transition lifts the failure backoff.
+    private var lastWeatherFailureAt: TimeInterval?
+    private var weatherRefreshGeneration: UInt64 = 0
+    private var weatherPathMonitor: NWPathMonitor?
+    private var weatherPathIsSatisfied: Bool?
+    private nonisolated static let weatherRetryInterval: TimeInterval = 5 * 60
+    // Read-only bookkeeping for `playbackStatus` / `makePreviewImage` (host UI).
+    private var currentPlaybackSegments: [PlaybackStatus.Segment] = []
+    private var currentPlaybackDuration: TimeInterval = 0
+    private var activeVideoEndSeconds: TimeInterval?
+    private var transitionDurationSeconds: TimeInterval = 0
+    private var frameSequenceFinished = false
+    private var previewGenerationInFlight = false
+    private var lastPreviewImage: CGImage?
 
     // MARK: - Reactions (docs/REACTION_POSES.md §5)
 
@@ -199,6 +217,7 @@ public final class SnoopySceneView: NSView {
         // repeating timer on the main run loop for the life of the process.
         reactionIntervalTimer?.invalidate()
         hostClock?.invalidate()
+        weatherPathMonitor?.cancel()
     }
 
     private func configureView() {
@@ -274,6 +293,8 @@ public final class SnoopySceneView: NSView {
         // Start identically in Preview and full-screen mode. The first media
         // tree installs synchronously and its decoded first-frame placeholder
         // remains visible during AVPlayer preroll; no poster/cover interstitial.
+        lastWeatherFailureAt = nil
+        startWeatherPathMonitor()
         refreshWeatherIfNeeded()
         playNext()
     }
@@ -286,6 +307,8 @@ public final class SnoopySceneView: NSView {
         startupFadeHasBegun = false
         weatherRefreshTask?.cancel()
         weatherRefreshTask = nil
+        weatherRefreshGeneration &+= 1
+        stopWeatherPathMonitor()
         reactionIntervalTimer?.invalidate()
         reactionIntervalTimer = nil
         // Nothing may report a stale trigger or park to a host after stop().
@@ -447,6 +470,9 @@ public final class SnoopySceneView: NSView {
     ) {
         isPlaying = false
         currentAssetID = nil
+        currentPlaybackSegments.removeAll()
+        currentPlaybackDuration = 0
+        frameSequenceFinished = false
         watchdogWorkItem?.cancel()
         watchdogWorkItem = nil
         stopFrameDisplayLink()
@@ -514,6 +540,7 @@ public final class SnoopySceneView: NSView {
             teardownPlayerLayer(playerLayer)
             playerLayer = nil
             activeVideoAssetID = nil
+            activeVideoEndSeconds = nil
             holdingActiveFrameForIdleEntry = false
         }
         if preservingIdleComposite {
@@ -826,41 +853,129 @@ public final class SnoopySceneView: NSView {
         )
     }
 
+    /// Refresh the cached weather snapshot when it is stale. Cheap when
+    /// nothing is due: it returns at once while the snapshot does not need a
+    /// refresh, while a fetch is in flight, or within 5 minutes of a failed
+    /// attempt (the path monitor lifts that backoff as soon as the network is
+    /// back). Called at start, at every media boundary and on resume, so a
+    /// fetch that failed before Wi-Fi was up is retried without a relaunch.
     private func refreshWeatherIfNeeded() {
-        guard SnoopyPreferences.weatherEnabled else { return }
-        if let snapshot = SnoopyPreferences.weatherSnapshot(), !snapshot.needsRefresh { return }
+        startWeatherRefresh(reason: "scheduled", ignoringGates: false)
+    }
+
+    /// Fetch the weather now, ignoring the snapshot's refresh gate and the
+    /// failure backoff (a panel button). Still one fetch at a time; every
+    /// outcome is logged with the "SnoopyTVScreenSaver: weather" prefix.
+    public func refreshWeatherNow() {
+        startWeatherRefresh(reason: "manual", ignoringGates: true)
+    }
+
+    private func startWeatherRefresh(reason: String, ignoringGates: Bool) {
+        guard SnoopyPreferences.weatherEnabled else {
+            if ignoringGates { NSLog("SnoopyTVScreenSaver: weather refresh skipped: weather linking is off") }
+            return
+        }
+        guard weatherRefreshTask == nil else {
+            if ignoringGates { NSLog("SnoopyTVScreenSaver: weather refresh already in flight") }
+            return
+        }
+        if !ignoringGates {
+            if let snapshot = SnoopyPreferences.weatherSnapshot(), !snapshot.needsRefresh { return }
+            if let failedAt = lastWeatherFailureAt,
+               ProcessInfo.processInfo.systemUptime - failedAt < Self.weatherRetryInterval { return }
+        }
         let city = SnoopyPreferences.defaults.string(forKey: SnoopyPreferences.cityNameKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard SnoopyPreferences.weatherLocation() != nil || city.count >= 2 else { return }
-        weatherRefreshTask?.cancel()
-        weatherRefreshTask = Task {
-            do {
-                let client = SnoopyWeatherClient()
-                let location: SnoopyWeatherLocation
-                if let saved = SnoopyPreferences.weatherLocation() {
-                    location = saved
-                } else {
-                    location = try await client.resolve(city: city)
-                    guard !Task.isCancelled else { return }
-                    SnoopyPreferences.save(weatherLocation: location)
+        let savedLocation = SnoopyPreferences.weatherLocation()
+        guard savedLocation != nil || city.count >= 2 else {
+            if ignoringGates { NSLog("SnoopyTVScreenSaver: weather refresh skipped: no city configured") }
+            return
+        }
+        weatherRefreshGeneration &+= 1
+        let generation = weatherRefreshGeneration
+        NSLog("SnoopyTVScreenSaver: weather refresh started reason=%@ location=%@",
+              reason, savedLocation?.name ?? city)
+        weatherRefreshTask = Task { @MainActor [weak self] in
+            let succeeded = await Self.performWeatherRefresh(city: city)
+            // A cancelled task (stop()) has already been forgotten; a later
+            // start() may own a newer task under this property.
+            guard !Task.isCancelled, let self, self.weatherRefreshGeneration == generation else { return }
+            self.weatherRefreshTask = nil
+            self.lastWeatherFailureAt = succeeded ? nil : ProcessInfo.processInfo.systemUptime
+        }
+    }
+
+    /// One fetch (city lookup first when no location is saved), off the main
+    /// actor: `nonisolated` so the awaits suspend on the cooperative pool
+    /// rather than hop back to the main actor between them. Returns false on
+    /// failure; a cancelled fetch logs nothing.
+    private nonisolated static func performWeatherRefresh(city: String) async -> Bool {
+        do {
+            let client = SnoopyWeatherClient()
+            let location: SnoopyWeatherLocation
+            if let saved = SnoopyPreferences.weatherLocation() {
+                location = saved
+            } else {
+                location = try await client.resolve(city: city)
+                guard !Task.isCancelled else { return false }
+                SnoopyPreferences.save(weatherLocation: location)
+            }
+            let snapshot = try await client.fetch(location: location)
+            guard !Task.isCancelled else { return false }
+            SnoopyPreferences.save(weatherSnapshot: snapshot)
+            NSLog("SnoopyTVScreenSaver: weather refreshed location=%@ source=%@ conditions=%@",
+                  location.name, snapshot.source ?? "unknown", snapshot.conditions.joined(separator: ","))
+            return true
+        } catch {
+            if !Task.isCancelled {
+                NSLog("SnoopyTVScreenSaver: weather refresh failed: %@ (next automatic attempt in %.0fs, or when the network returns)",
+                      error.localizedDescription, weatherRetryInterval)
+            }
+            return false
+        }
+    }
+
+    /// Weather returns as soon as the network does: a `.satisfied` path after
+    /// an unsatisfied one clears the failure backoff and refreshes right away.
+    private func startWeatherPathMonitor() {
+        guard weatherPathMonitor == nil else { return }
+        let monitor = NWPathMonitor()
+        weatherPathIsSatisfied = nil
+        // The monitor owns this closure; a strong `monitor` capture would be
+        // a cycle that outlives stop(), leaking one cancelled monitor per
+        // stop()/start() cycle.
+        monitor.pathUpdateHandler = { [weak self, weak monitor] path in
+            let satisfied = path.status == .satisfied
+            DispatchQueue.main.async {
+                guard let self, let monitor, self.weatherPathMonitor === monitor else { return }
+                let previous = self.weatherPathIsSatisfied
+                self.weatherPathIsSatisfied = satisfied
+                guard satisfied, previous != true else { return }
+                if previous == false {
+                    NSLog("SnoopyTVScreenSaver: weather: network path satisfied again; retrying now")
+                    self.lastWeatherFailureAt = nil
                 }
-                let snapshot = try await client.fetch(location: location)
-                guard !Task.isCancelled else { return }
-                SnoopyPreferences.save(weatherSnapshot: snapshot)
-                NSLog("SnoopyTVScreenSaver: weather refreshed location=%@ source=%@ conditions=%@",
-                      location.name, snapshot.source ?? "unknown", snapshot.conditions.joined(separator: ","))
-            } catch {
-                if !Task.isCancelled {
-                    NSLog("SnoopyTVScreenSaver: weather refresh failed: %@", error.localizedDescription)
-                }
+                self.refreshWeatherIfNeeded()
             }
         }
+        monitor.start(queue: DispatchQueue.global(qos: .utility))
+        weatherPathMonitor = monitor
+    }
+
+    private func stopWeatherPathMonitor() {
+        weatherPathMonitor?.cancel()
+        weatherPathMonitor = nil
+        weatherPathIsSatisfied = nil
     }
 
     private func playNext() {
         guard !isStopping, let store else {
             return
         }
+        // Weather self-heals at media boundaries; this returns at once while
+        // the cached snapshot is fresh, a fetch is in flight or a failed
+        // attempt is inside its backoff. It never touches playback state.
+        refreshWeatherIfNeeded()
         // AppKit commits the outgoing removal and incoming installation as a
         // single frame. AVPlayer playback remains time-driven; only implicit
         // layer property animations are disabled for this swap.
@@ -1220,6 +1335,7 @@ public final class SnoopySceneView: NSView {
         let visualEnd = ProcessInfo.processInfo.environment["SNOOPY_TEST_ACTIVE_END_SECONDS"].flatMap(Double.init)
             ?? media?.effectiveEndSeconds ?? media?.durationSeconds
             ?? AVURLAsset(url: url).duration.seconds
+        activeVideoEndSeconds = visualEnd.isFinite && visualEnd > 0.5 ? visualEnd : nil
         if visualEnd.isFinite, visualEnd > 0.5 {
             let entryOverlap = pendingIdleEntryTransitionDuration(from: store)
             let triggerTime = entryOverlap.map { max(0.25, visualEnd - $0) } ?? visualEnd
@@ -1713,6 +1829,7 @@ public final class SnoopySceneView: NSView {
             self?.completeSceneTransitionStage(stage, selection: selection, reason: "ended")
         }
         let duration = completionDuration
+        transitionDurationSeconds = duration.isFinite ? duration : 0
         if stage == .reveal { idleExitTransitionInProgress = true }
         currentAssetID = "\(selection.pairID).\(stage.rawValue)"
         isPlaying = true
@@ -2024,7 +2141,8 @@ public final class SnoopySceneView: NSView {
         pendingPoseID: String?,
         visitor: VisitorPlaybackPlan? = nil,
         characterAnimationKind: CharacterAnimationKind? = nil,
-        holdBoundaryAfterSegment: Int? = nil
+        holdBoundaryAfterSegment: Int? = nil,
+        segments: [(assetID: String, urlCount: Int)] = []
     ) -> Bool {
         guard !plan.urls.isEmpty else { return false }
         let estimatedSeconds = estimatedDuration(of: plan.urls)
@@ -2057,6 +2175,10 @@ public final class SnoopySceneView: NSView {
             index >= 0 && index < composition.segmentEnds.count ? composition.segmentEnds[index] : nil
         }
         let compositionEndSeconds = composition.segmentEnds.last?.seconds ?? 0
+        currentPlaybackSegments = playbackSegments(
+            assetID: assetID, segments: segments, urlEnds: composition.segmentEnds.map(\.seconds)
+        )
+        currentPlaybackDuration = compositionEndSeconds
         // A multi-item AVQueuePlayer briefly exposes the transparent backdrop
         // while VideoToolbox switches decoders between Intro/Loop/Outro or an
         // action and its returning BasePose. A single composition item lets
@@ -2137,6 +2259,8 @@ public final class SnoopySceneView: NSView {
             self.compositeVideoLayer = nil
             self.compositeVideoHostView = nil
             self.currentAssetID = nil
+            self.currentPlaybackSegments.removeAll()
+            self.currentPlaybackDuration = 0
             self.pendingBasePoseID = nil
             self.isPlaying = false
             self.compositePlaybackGeneration &+= 1
@@ -2735,7 +2859,8 @@ public final class SnoopySceneView: NSView {
                 assetID: "\(idle.id)+\(pose.id)", backgroundImage: backgroundImageURL,
                 backgroundVideo: backgroundVideoURL,
                 backgroundSprite: backgroundSprite, plan: plan, palette: palette,
-                pendingPoseID: pose.id, visitor: visitor, characterAnimationKind: .basePose
+                pendingPoseID: pose.id, visitor: visitor, characterAnimationKind: .basePose,
+                segments: [(assetID: pose.id, urlCount: plan.urls.count)]
             )
         }
         let frames = phasedFrameURLs(for: pose, store: store, minimumDuration: 0)
@@ -2748,7 +2873,8 @@ public final class SnoopySceneView: NSView {
             frameURLs: frames,
             foregroundSprite: pose.sprites.first(where: { $0.spriteType == "frameSequence" }),
             palette: palette,
-            pendingPoseID: pose.id, visitor: visitor, characterAnimationKind: .basePose
+            pendingPoseID: pose.id, visitor: visitor, characterAnimationKind: .basePose,
+            segments: [(assetID: pose.id, urlCount: frames.count)]
         )
     }
 
@@ -2850,7 +2976,8 @@ public final class SnoopySceneView: NSView {
             backgroundImage: stage.backgroundImageURL, backgroundVideo: stage.backgroundVideoURL,
             backgroundSprite: stage.backgroundSprite, plan: combined, palette: stage.palette,
             pendingPoseID: endPoseID, visitor: visitor,
-            holdBoundaryAfterSegment: holdBoundaryAfterSegment
+            holdBoundaryAfterSegment: holdBoundaryAfterSegment,
+            segments: zip(assetIDs, plans).map { (assetID: $0, urlCount: $1.urls.count) }
         )
         if started { recordCharacterMix(plans: plans, assetIDs: assetIDs) }
         return started
@@ -2916,7 +3043,9 @@ public final class SnoopySceneView: NSView {
                     backgroundVideo: backgroundVideoURL,
                     backgroundSprite: backgroundSprite, plan: combined,
                     palette: palette, pendingPoseID: endPose, visitor: nil,
-                    holdBoundaryAfterSegment: plan.urls.count - 1
+                    holdBoundaryAfterSegment: plan.urls.count - 1,
+                    segments: [(assetID: asset.id, urlCount: plan.urls.count),
+                               (assetID: "\(tail.hold.id)x\(tail.repeats)", urlCount: tail.plan.urls.count)]
                 )
                 // Park only once the hold item is really under way: a failed
                 // composition leaves no RPH surface for the transition to use.
@@ -2946,7 +3075,9 @@ public final class SnoopySceneView: NSView {
                     backgroundImage: backgroundImageURL,
                     backgroundVideo: backgroundVideoURL,
                     backgroundSprite: backgroundSprite, plan: combined,
-                    palette: palette, pendingPoseID: endPose, visitor: visitor
+                    palette: palette, pendingPoseID: endPose, visitor: visitor,
+                    segments: [(assetID: asset.id, urlCount: plan.urls.count),
+                               (assetID: basePose.id, urlCount: basePlan.urls.count)]
                 )
                 if started {
                     sessionState.recordCharacterAnimation(
@@ -2972,7 +3103,9 @@ public final class SnoopySceneView: NSView {
                     backgroundImage: backgroundImageURL,
                     backgroundVideo: backgroundVideoURL,
                     backgroundSprite: backgroundSprite, plan: combined,
-                    palette: palette, pendingPoseID: endPose, visitor: visitor
+                    palette: palette, pendingPoseID: endPose, visitor: visitor,
+                    segments: [(assetID: asset.id, urlCount: plan.urls.count),
+                               (assetID: basePose.id, urlCount: basePlan.urls.count)]
                 )
                 if started {
                     sessionState.recordCharacterAnimation(
@@ -2989,7 +3122,8 @@ public final class SnoopySceneView: NSView {
                 backgroundVideo: backgroundVideoURL,
                 backgroundSprite: backgroundSprite, plan: plan, palette: palette,
                 pendingPoseID: endPose, visitor: visitor,
-                characterAnimationKind: animationKind
+                characterAnimationKind: animationKind,
+                segments: [(assetID: asset.id, urlCount: plan.urls.count)]
             )
         }
         if isIdleExitEnter, let graph = playbackGraph,
@@ -3019,7 +3153,11 @@ public final class SnoopySceneView: NSView {
             foregroundSprite: asset.sprites.first(where: { $0.spriteType == "frameSequence" }),
             palette: palette, pendingPoseID: endPose,
             visitor: visitor,
-            characterAnimationKind: appendedBaseFrameCount == 0 ? animationKind : nil
+            characterAnimationKind: appendedBaseFrameCount == 0 ? animationKind : nil,
+            segments: appendedBaseFrameCount > 0
+                ? [(assetID: asset.id, urlCount: fallbackFrames.count - appendedBaseFrameCount),
+                   (assetID: endPose, urlCount: appendedBaseFrameCount)]
+                : [(assetID: asset.id, urlCount: fallbackFrames.count)]
         )
         if started, let animationKind, appendedBaseFrameCount > 0 {
             sessionState.recordCharacterAnimation(
@@ -3413,7 +3551,8 @@ public final class SnoopySceneView: NSView {
         palette: (background: NSColor, overlay: NSColor?),
         pendingPoseID: String? = nil,
         visitor: VisitorPlaybackPlan? = nil,
-        characterAnimationKind: CharacterAnimationKind? = nil
+        characterAnimationKind: CharacterAnimationKind? = nil,
+        segments: [(assetID: String, urlCount: Int)] = []
     ) -> Bool {
         guard !frameURLs.isEmpty else { return false }
         let estimatedSeconds = TimeInterval(frameURLs.count) / 24.0
@@ -3442,6 +3581,12 @@ public final class SnoopySceneView: NSView {
         currentAssetID = assetID
         pendingBasePoseID = pendingPoseID
         isPlaying = true
+        frameSequenceFinished = false
+        currentPlaybackSegments = playbackSegments(
+            assetID: assetID, segments: segments,
+            urlEnds: (1...frameURLs.count).map { TimeInterval($0) / 24.0 }
+        )
+        currentPlaybackDuration = estimatedSeconds
         let backgroundFrame = compositeFrame(for: backgroundSprite)
         let foregroundFrame = compositeFrame(for: foregroundSprite)
         NSLog("SnoopyTVScreenSaver: composite %@ (%ld frames) background=%@ foreground=%@",
@@ -3463,6 +3608,8 @@ public final class SnoopySceneView: NSView {
             sequenceView.removeFromSuperview()
             frameView = nil
             currentAssetID = nil
+            currentPlaybackSegments.removeAll()
+            currentPlaybackDuration = 0
             pendingBasePoseID = nil
             isPlaying = false
             NSLog("SnoopyTVScreenSaver: discarded undecodable HEIC composite %@; retaining outgoing surface",
@@ -3577,6 +3724,7 @@ public final class SnoopySceneView: NSView {
         guard nextIndex < frameSequenceURLs.count else {
             let misses = frameSequenceDecodeMisses
             let visitorControls = frameSequenceVisitorControlsCompletion
+            frameSequenceFinished = true
             stopFrameDisplayLink()
             if !visitorControls {
                 finishCurrentPlayback("composite ended; decodeMisses=\(misses)")
@@ -3808,6 +3956,419 @@ public final class SnoopySceneView: NSView {
         transitionHostView?.frame = bounds
     }
 
+    // MARK: - Playback status and preview (host UI)
+
+    /// A read-only view of what the compositor is doing right now, for a
+    /// status panel. Main thread; cheap (no AV objects are created).
+    public struct PlaybackStatus: Sendable {
+        public enum Mode: Sendable, Equatable {
+            /// A character item plays in the idle scene (room) `sceneID`.
+            case idle(sceneID: String)
+            /// A full-screen ActiveScene movie plays.
+            case activeScene(id: String)
+            /// A hide/reveal scene-transition tree plays (`stage` is "hide" or "reveal").
+            case transition(pairID: String, stage: String)
+            case none
+        }
+
+        /// One asset inside the seamless character item, with its media-time
+        /// range `[start, end)` in that item.
+        public struct Segment: Sendable, Equatable {
+            public let assetID: String
+            /// The `AssetRecord.kind` of the asset ("characterBasePose", …),
+            /// "hold" for a repeated reaction hold tail (`<holdID>x<repeats>`),
+            /// "unknown" otherwise.
+            public let kind: String
+            public let start: TimeInterval
+            public let end: TimeInterval
+
+            public init(assetID: String, kind: String, start: TimeInterval, end: TimeInterval) {
+                self.assetID = assetID
+                self.kind = kind
+                self.start = start
+                self.end = end
+            }
+        }
+
+        public let mode: Mode
+        /// The character item currently playing (idle mode), in order; empty otherwise.
+        public let segments: [Segment]
+        /// Index into `segments` for the player's current time.
+        public let currentSegmentIndex: Int?
+        /// Media seconds into the current item / video.
+        public let elapsed: TimeInterval
+        /// Total media seconds of the current item / video (0 if unknown).
+        public let duration: TimeInterval
+
+        public init(mode: Mode, segments: [Segment], currentSegmentIndex: Int?,
+                    elapsed: TimeInterval, duration: TimeInterval) {
+            self.mode = mode
+            self.segments = segments
+            self.currentSegmentIndex = currentSegmentIndex
+            self.elapsed = elapsed
+            self.duration = duration
+        }
+    }
+
+    /// What is playing right now. `.transition` while a hide/reveal tree is
+    /// mounted, `.activeScene` while the ActiveScene movie is the current
+    /// item, `.idle` while a character composite (video or HEIC frames) plays
+    /// in a room, `.none` otherwise. Elapsed and duration are media seconds
+    /// (unscaled by `playbackRate`); the segment table lists the assets of the
+    /// current seamless item. The table switches to an incoming item as soon
+    /// as it is built, i.e. up to its preroll (normally well under a second,
+    /// at most the 4 s timeout) before the retiring surface leaves the screen;
+    /// while an unready item is discarded the table is briefly empty. Reading
+    /// the status never touches playback.
+    public var playbackStatus: PlaybackStatus {
+        let mode: PlaybackStatus.Mode
+        if transitionHostView != nil, let transition = currentTransitionIdentity {
+            mode = .transition(pairID: transition.pairID, stage: transition.stage)
+        } else if playerLayer != nil, let id = activeVideoAssetID, currentAssetID == id {
+            mode = .activeScene(id: id)
+        } else if let sceneID = sessionState.currentIdleSceneID, hasMountedNormalIdleSurface {
+            mode = .idle(sceneID: sceneID)
+        } else if playerLayer != nil, let id = activeVideoAssetID ?? currentAssetID {
+            mode = .activeScene(id: id)
+        } else {
+            mode = .none
+        }
+        var segments: [PlaybackStatus.Segment] = []
+        var elapsed: TimeInterval = 0
+        var duration: TimeInterval = 0
+        switch mode {
+        case .transition:
+            // The first transition player (pose, idle background or mask)
+            // starts at the synchronized host time without a lead.
+            elapsed = Self.finiteSeconds(transitionPlayers.first?.currentTime())
+            duration = transitionDurationSeconds
+        case .activeScene:
+            let activePlayer = playerLayer?.player
+            elapsed = Self.finiteSeconds(activePlayer?.currentTime())
+            duration = activeVideoEndSeconds ?? Self.finiteSeconds(activePlayer?.currentItem?.duration)
+        case .idle:
+            if frameView != nil {
+                segments = currentPlaybackSegments
+                duration = currentPlaybackDuration
+                if frameSequenceURLs.isEmpty {
+                    elapsed = frameSequenceFinished ? duration : 0
+                } else {
+                    elapsed = TimeInterval(frameSequenceIndex) / 24.0
+                }
+            } else if compositeVideoHostView != nil, let player {
+                segments = currentPlaybackSegments
+                duration = currentPlaybackDuration
+                elapsed = Self.finiteSeconds(player.currentTime())
+            }
+        case .none:
+            break
+        }
+        let index: Int? = segments.isEmpty
+            ? nil
+            : (segments.firstIndex { elapsed < $0.end } ?? segments.count - 1)
+        return PlaybackStatus(
+            mode: mode, segments: segments, currentSegmentIndex: index, elapsed: elapsed, duration: duration
+        )
+    }
+
+    /// `currentAssetID` is "<pairID>.<stage>" while a transition tree plays.
+    private var currentTransitionIdentity: (pairID: String, stage: String)? {
+        guard let id = currentAssetID else { return nil }
+        for stage in [TransitionStage.hide, .reveal] where id.hasSuffix("." + stage.rawValue) {
+            return (String(id.dropLast(stage.rawValue.count + 1)), stage.rawValue)
+        }
+        return nil
+    }
+
+    private static func finiteSeconds(_ time: CMTime?) -> TimeInterval {
+        guard let time, time.isValid, !time.isIndefinite else { return 0 }
+        let seconds = time.seconds
+        return seconds.isFinite && seconds > 0 ? seconds : 0
+    }
+
+    /// The segment table of one seamless item: `segments` lists each asset
+    /// with the number of URLs (or HEIC frames) it contributed, `urlEnds` the
+    /// media time at which every URL ends. Without a list, or with one that
+    /// does not add up, the whole item is one segment named by `assetID`.
+    private func playbackSegments(
+        assetID: String, segments: [(assetID: String, urlCount: Int)], urlEnds: [TimeInterval]
+    ) -> [PlaybackStatus.Segment] {
+        let total = urlEnds.last ?? 0
+        guard !segments.isEmpty, segments.reduce(0, { $0 + $1.urlCount }) == urlEnds.count else {
+            return [PlaybackStatus.Segment(assetID: assetID, kind: segmentKind(for: assetID), start: 0, end: total)]
+        }
+        var result: [PlaybackStatus.Segment] = []
+        var cursor = 0
+        var start: TimeInterval = 0
+        for entry in segments {
+            cursor += entry.urlCount
+            let end = cursor > 0 ? urlEnds[cursor - 1] : 0
+            result.append(PlaybackStatus.Segment(
+                assetID: entry.assetID, kind: segmentKind(for: entry.assetID), start: start, end: end
+            ))
+            start = end
+        }
+        return result
+    }
+
+    private func segmentKind(for id: String) -> String {
+        guard let graph = playbackGraph else { return "unknown" }
+        if let asset = graph.assetsByID[id] { return asset.kind }
+        // A repeated reaction hold tail is named "<holdID>x<repeats>".
+        if let marker = id.lastIndex(of: "x") {
+            let repeats = id[id.index(after: marker)...]
+            if !repeats.isEmpty, repeats.allSatisfy(\.isNumber),
+               graph.assetsByID[String(id[..<marker])] != nil {
+                return "hold"
+            }
+        }
+        return "unknown"
+    }
+
+    private enum PreviewGravity { case resize, resizeAspect, resizeAspectFill }
+
+    private enum PreviewSource {
+        case color(CGColor)
+        case image(CGImage)
+        case videoFrame(asset: AVAsset, time: CMTime)
+    }
+
+    /// One thing to draw, captured on the main thread from the layer tree.
+    private struct PreviewDrawable {
+        let source: PreviewSource
+        /// View coordinates (points, y up), like the layer tree.
+        let frame: CGRect
+        /// Accumulated `masksToBounds`, view coordinates.
+        let clip: CGRect?
+        let opacity: CGFloat
+        let gravity: PreviewGravity
+    }
+
+    private static let previewQueue = DispatchQueue(label: "com.dingdangnao.snoopy.preview", qos: .utility)
+
+    /// A small picture of what is on screen right now, for a panel thumbnail.
+    /// The mounted layer tree is walked in z-order on the main thread — the
+    /// palette colours, the decoded HEIC/placeholder images and, for every
+    /// AVPlayerLayer, its player's current item asset and `currentTime()` —
+    /// then decoded and composited on a utility queue (AVAssetImageGenerator
+    /// with zero tolerance; HEVC-alpha keeps its alpha). Positions match the
+    /// screen: everything is scaled by `maxPixelSize / bounds.width`. A wipe
+    /// mask cannot be reproduced, so during a transition the picture shows
+    /// the destination (the room while hiding, the movie while revealing).
+    /// Playback is never touched. Completes with nil when nothing sensible is
+    /// on screen; while a generation is in flight a new call completes with
+    /// the most recent image instead of starting another decode.
+    public func makePreviewImage(maxPixelSize: Int = 640, completion: @escaping @MainActor (CGImage?) -> Void) {
+        guard !previewGenerationInFlight else {
+            completion(lastPreviewImage)
+            return
+        }
+        let bounds = self.bounds
+        guard maxPixelSize > 0, bounds.width > 0, bounds.height > 0 else {
+            completion(nil)
+            return
+        }
+        let drawables = capturePreviewDrawables()
+        let hasContent = drawables.contains {
+            if case .color = $0.source { return false }
+            return true
+        }
+        guard hasContent else {
+            completion(nil)
+            return
+        }
+        let scale = CGFloat(maxPixelSize) / bounds.width
+        previewGenerationInFlight = true
+        Self.previewQueue.async { [weak self] in
+            let image = Self.renderPreview(drawables, bounds: bounds, scale: scale, maxPixelSize: maxPixelSize)
+            Task { @MainActor in
+                self?.previewGenerationInFlight = false
+                self?.lastPreviewImage = image
+                completion(image)
+            }
+        }
+    }
+
+    private func capturePreviewDrawables() -> [PreviewDrawable] {
+        guard let root = layer else { return [] }
+        // NSImageViews that draw through AppKit (backdrop, halftone) expose
+        // their picture as `image`, not as CGImage layer contents.
+        var imageViews: [ObjectIdentifier: NSImageView] = [:]
+        func index(_ view: NSView) {
+            for subview in view.subviews {
+                if let imageView = subview as? NSImageView, let viewLayer = imageView.layer {
+                    imageViews[ObjectIdentifier(viewLayer)] = imageView
+                }
+                index(subview)
+            }
+        }
+        index(self)
+        var revealing = false
+        if case .transition(_, let stage) = playbackStatus.mode {
+            revealing = stage == TransitionStage.reveal.rawValue
+        }
+        var drawables: [PreviewDrawable] = []
+        collectPreviewDrawables(
+            from: root, frame: bounds, clip: nil, opacity: 1,
+            revealing: revealing, imageViews: imageViews, into: &drawables
+        )
+        return drawables
+    }
+
+    private func collectPreviewDrawables(
+        from layer: CALayer, frame: CGRect, clip inheritedClip: CGRect?, opacity inheritedOpacity: CGFloat,
+        revealing: Bool, imageViews: [ObjectIdentifier: NSImageView], into drawables: inout [PreviewDrawable]
+    ) {
+        guard !layer.isHidden else { return }
+        // The presentation value follows a running fade (its model value is
+        // already 0); the model value covers a host just flipped from 0.001
+        // to 1 in an uncommitted transaction. Hosts kept at 0.001 while they
+        // preroll are invisible on screen and are left out.
+        let layerOpacity = max(layer.opacity, layer.presentation()?.opacity ?? layer.opacity)
+        let opacity = inheritedOpacity * CGFloat(layerOpacity)
+        guard opacity >= 0.01 else { return }
+        // A masked layer is the moving ActiveScene under a wipe. The mask is
+        // not reproduced: the movie is drawn whole while revealing and left
+        // out while hiding, so the picture shows the destination.
+        if layer.mask != nil, !revealing { return }
+        let clip = layer.masksToBounds ? (inheritedClip.map { $0.intersection(frame) } ?? frame) : inheritedClip
+        if let color = layer.backgroundColor, color.alpha > 0 {
+            drawables.append(PreviewDrawable(
+                source: .color(color), frame: frame, clip: clip, opacity: opacity, gravity: .resize
+            ))
+        }
+        if let playerLayer = layer as? AVPlayerLayer {
+            if playerLayer.isReadyForDisplay, let player = playerLayer.player,
+               let asset = player.currentItem?.asset {
+                // A seamless item plays a mutable composition; the generator
+                // reads an immutable snapshot of it.
+                let snapshot = (asset as? AVMutableComposition).flatMap { $0.copy() as? AVAsset } ?? asset
+                drawables.append(PreviewDrawable(
+                    source: .videoFrame(asset: snapshot, time: player.currentTime()), frame: frame,
+                    clip: clip, opacity: opacity, gravity: Self.previewGravity(playerLayer.videoGravity)
+                ))
+            }
+        } else if let contents = layer.contents, CFGetTypeID(contents as AnyObject) == CGImage.typeID {
+            drawables.append(PreviewDrawable(
+                source: .image(contents as! CGImage), frame: frame, clip: clip, opacity: opacity,
+                gravity: Self.previewGravity(layer.contentsGravity)
+            ))
+        } else if let view = imageViews[ObjectIdentifier(layer)], let image = view.image,
+                  let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            drawables.append(PreviewDrawable(
+                source: .image(cgImage), frame: frame, clip: clip, opacity: opacity,
+                gravity: Self.previewGravity(view.imageScaling)
+            ))
+        }
+        let ordered = (layer.sublayers ?? []).enumerated()
+            .sorted { ($0.element.zPosition, $0.offset) < ($1.element.zPosition, $1.offset) }
+            .map(\.element)
+        let origin = CGPoint(x: frame.minX - layer.bounds.minX, y: frame.minY - layer.bounds.minY)
+        for sublayer in ordered {
+            collectPreviewDrawables(
+                from: sublayer, frame: sublayer.frame.offsetBy(dx: origin.x, dy: origin.y),
+                clip: clip, opacity: opacity, revealing: revealing, imageViews: imageViews, into: &drawables
+            )
+        }
+    }
+
+    private static func previewGravity(_ gravity: AVLayerVideoGravity) -> PreviewGravity {
+        switch gravity {
+        case .resizeAspect: return .resizeAspect
+        case .resizeAspectFill: return .resizeAspectFill
+        default: return .resize
+        }
+    }
+
+    private static func previewGravity(_ gravity: CALayerContentsGravity) -> PreviewGravity {
+        switch gravity {
+        case .resizeAspect: return .resizeAspect
+        case .resizeAspectFill: return .resizeAspectFill
+        default: return .resize
+        }
+    }
+
+    private static func previewGravity(_ scaling: NSImageScaling) -> PreviewGravity {
+        scaling == .scaleAxesIndependently ? .resize : .resizeAspect
+    }
+
+    /// Utility queue: decode and composite the captured drawables. The three
+    /// helpers below are `nonisolated` because they run on `previewQueue`,
+    /// never on the main actor the view is isolated to.
+    private nonisolated static func renderPreview(
+        _ drawables: [PreviewDrawable], bounds: CGRect, scale: CGFloat, maxPixelSize: Int
+    ) -> CGImage? {
+        let width = Int((bounds.width * scale).rounded(.up))
+        let height = Int((bounds.height * scale).rounded(.up))
+        guard width > 0, height > 0,
+              let context = CGContext(
+                  data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                  space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                  bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+              ) else { return nil }
+        context.interpolationQuality = .medium
+        context.scaleBy(x: CGFloat(width) / bounds.width, y: CGFloat(height) / bounds.height)
+        context.translateBy(x: -bounds.minX, y: -bounds.minY)
+        for drawable in drawables {
+            autoreleasepool {
+                context.saveGState()
+                defer { context.restoreGState() }
+                if let clip = drawable.clip { context.clip(to: clip) }
+                context.setAlpha(drawable.opacity)
+                switch drawable.source {
+                case .color(let color):
+                    context.setFillColor(color)
+                    context.fill(drawable.frame)
+                case .image(let image):
+                    drawPreviewImage(image, in: drawable.frame, gravity: drawable.gravity, context: context)
+                case .videoFrame(let asset, let time):
+                    if let image = previewVideoFrame(asset: asset, time: time, maxPixelSize: maxPixelSize) {
+                        drawPreviewImage(image, in: drawable.frame, gravity: drawable.gravity, context: context)
+                    }
+                }
+            }
+        }
+        return context.makeImage()
+    }
+
+    private nonisolated static func drawPreviewImage(
+        _ image: CGImage, in frame: CGRect, gravity: PreviewGravity, context: CGContext
+    ) {
+        let size = CGSize(width: image.width, height: image.height)
+        let rect: CGRect
+        switch gravity {
+        case .resize:
+            rect = frame
+        case .resizeAspect:
+            rect = SpritePlacementResolver.aspectFitFrame(contentSize: size, in: frame)
+        case .resizeAspectFill:
+            context.clip(to: frame)
+            rect = SpritePlacementResolver.aspectFillFrame(contentSize: size, in: frame)
+        }
+        context.draw(image, in: rect)
+    }
+
+    /// The frame of `asset` at `time` (exact when possible; a paused player
+    /// sitting on its last sample is clamped just inside the duration, and a
+    /// miss is retried with a small tolerance).
+    private nonisolated static func previewVideoFrame(asset: AVAsset, time: CMTime, maxPixelSize: Int) -> CGImage? {
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+        generator.maximumSize = CGSize(width: maxPixelSize, height: maxPixelSize)
+        var requested = time.isValid && !time.isIndefinite && CMTimeCompare(time, .zero) >= 0 ? time : .zero
+        let duration = asset.duration
+        if duration.isValid, !duration.isIndefinite, CMTimeCompare(duration, .zero) > 0 {
+            let last = CMTimeSubtract(duration, CMTime(value: 1, timescale: 48))
+            if CMTimeCompare(last, .zero) > 0, CMTimeCompare(requested, last) > 0 { requested = last }
+        }
+        if let image = try? generator.copyCGImage(at: requested, actualTime: nil) { return image }
+        generator.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: 600)
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: 600)
+        return try? generator.copyCGImage(at: requested, actualTime: nil)
+    }
+
     // MARK: - Host clock (for hosts that are not a ScreenSaverView)
 
     private var hostClock: Timer?
@@ -3914,6 +4475,7 @@ public final class SnoopySceneView: NSView {
         deferredWhilePaused.removeAll()
         deferred.forEach { $0() }
         NSLog("SnoopyTVScreenSaver: resumed after %.1fs (%ld deferred)", pausedFor, deferred.count)
+        refreshWeatherIfNeeded()
     }
 
     private func resetPauseState() {

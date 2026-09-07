@@ -70,10 +70,23 @@ final class WallpaperController: NSObject {
 
     // MARK: - Settings changes (called by the menu)
 
-    /// The scene on the main display (previews and scene info come from it).
+    /// Every playing display's scene view, for the screenshot hook.
+    var playingScenes: [(displayID: CGDirectDisplayID, scene: SnoopySceneView)] {
+        windows.filter { $0.value.state != .stopped }.map { ($0.key, $0.value.scene) }
+    }
+
+    /// The scene on the main display (previews and scene info come from it),
+    /// or nil while that display's window is stopped — off, or not started
+    /// yet — and the system wallpaper is what is on screen.
     var primaryScene: SnoopySceneView? {
-        if let main = NSScreen.main, let window = windows[main.displayID] { return window.scene }
-        return windows.values.first?.scene
+        let window: DesktopWindow?
+        if let main = NSScreen.main, let known = windows[main.displayID] {
+            window = known
+        } else {
+            window = windows.values.first
+        }
+        guard let window, window.state != .stopped else { return nil }
+        return window.scene
     }
 
     func nextScene() {
@@ -84,24 +97,12 @@ final class WallpaperController: NSObject {
         for window in windows.values where window.state != .stopped { window.scene.skipToPreviousScene() }
     }
 
-    /// Fire a reaction trigger (a `ReactionTrigger` token such as "doorbell")
-    /// on every display, the same fan-out as `nextScene()`: each scene
-    /// consumes it at its next character boundary while it is still fresh.
-    /// A paused display keeps it — the scene's pause bookkeeping stops the
-    /// freshness clock — so it reacts once it resumes.
-    func react(_ trigger: String) {
-        for window in windows.values where window.state != .stopped { window.scene.triggerReaction(trigger) }
-    }
-
-    /// The triggers the loaded index can answer, read from the main display's
-    /// scene (empty on a V1-only index, or before the index has loaded).
-    var availableReactionTriggers: [String] {
-        primaryScene?.availableReactionTriggers ?? []
-    }
-
-    /// The trigger the main display is waiting to consume, if any.
-    var pendingReactionTrigger: String? {
-        primaryScene?.pendingReactionTriggerName
+    /// Fetch the weather now on every display's scene (the panel's refresh
+    /// button). Each scene ignores its refresh gate and failure backoff but
+    /// still runs one fetch at a time; the snapshot lands in the shared
+    /// preferences, so a stopped scene's fetch is as good as a playing one's.
+    func refreshWeather() {
+        for window in windows.values { window.scene.refreshWeatherNow() }
     }
 
     /// Tear every session down and start fresh (menu action and recovery hatch).
