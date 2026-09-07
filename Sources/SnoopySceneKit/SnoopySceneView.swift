@@ -2845,13 +2845,34 @@ public final class SnoopySceneView: NSView {
             urls: plans.flatMap(\.urls), sprite: firstPlan.sprite,
             loopCount: plans.reduce(0) { $0 + $1.loopCount }
         )
-        return startVideoComposition(
+        let started = startVideoComposition(
             assetID: "\(stage.idle.id)+" + assetIDs.joined(separator: "+"),
             backgroundImage: stage.backgroundImageURL, backgroundVideo: stage.backgroundVideoURL,
             backgroundSprite: stage.backgroundSprite, plan: combined, palette: stage.palette,
             pendingPoseID: endPoseID, visitor: visitor,
             holdBoundaryAfterSegment: holdBoundaryAfterSegment
         )
+        if started { recordCharacterMix(plans: plans, assetIDs: assetIDs) }
+        return started
+    }
+
+    /// Apple balances elapsed animation time per kind (71 % BP / 20 % AP /
+    /// 9 % CM). The seamless sequence path plays [bridge?, action, BP] as one
+    /// item, so each planned asset is accounted here in sequence order, as
+    /// the per-segment path does for its combined items; pose bridges and
+    /// reaction clips are not part of the mix.
+    private func recordCharacterMix(plans: [PhasedVideoPlan], assetIDs: [String]) {
+        guard let graph = playbackGraph else { return }
+        for (id, plan) in zip(assetIDs, plans) {
+            let kind: CharacterAnimationKind
+            switch graph.assetsByID[id]?.kind {
+            case "characterAdditionalPose": kind = .additionalPose
+            case "characterMoment": kind = .moment
+            case "characterBasePose": kind = .basePose
+            default: continue
+            }
+            sessionState.recordCharacterAnimation(kind, duration: estimatedDuration(of: plan.urls))
+        }
     }
 
     private func playCharacterSegment(
