@@ -9,6 +9,7 @@ import SwiftUI
 final class WallpaperAppDelegate: NSObject, NSApplicationDelegate {
     let controller = WallpaperController()
     private(set) lazy var model = WallpaperModel(controller: controller)
+    private var screenshotRequestSource: DispatchSourceFileSystemObject?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -18,34 +19,49 @@ final class WallpaperAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        screenshotRequestSource?.cancel()
         controller.shutdown()
     }
 
     // MARK: - Screenshots (remote checks)
 
-    /// Posting this local distributed notification makes the app write its
-    /// own panel and a frame of every playing wallpaper to PNG files:
-    ///
-    ///     ~/Library/Application Support/Snoopy Wallpaper/Screenshots/panel.png
-    ///     …/wallpaper-<displayID>.png
-    ///
-    /// The destination is fixed; nothing is read from the notification. It
-    /// exists because the desktop cannot be captured from a session without
-    /// Screen Recording permission (for example when the Mac is used remotely).
-    static let screenshotNotification = Notification.Name("com.dingdangnao.snoopy.wallpaper.screenshot")
-
-    private func installScreenshotHook() {
-        DistributedNotificationCenter.default().addObserver(
-            self, selector: #selector(writeScreenshots(_:)),
-            name: Self.screenshotNotification, object: nil
-        )
+    /// `~/Library/Application Support/Snoopy Wallpaper/Screenshots`. Creating
+    /// a file named `request` in it makes the app write its own panel
+    /// (`panel.png`) and a frame of every playing wallpaper
+    /// (`wallpaper-<displayID>.png`) there, then remove the request. It exists
+    /// because the desktop cannot be captured from a session without Screen
+    /// Recording permission (for example when the Mac is used remotely); a
+    /// file works from any context, unlike a distributed notification.
+    static var screenshotsDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Snoopy Wallpaper/Screenshots", isDirectory: true)
     }
 
-    @objc private func writeScreenshots(_ note: Notification) {
+    private func installScreenshotHook() {
+        let directory = Self.screenshotsDirectory
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let descriptor = open(directory.path, O_EVTONLY)
+        guard descriptor >= 0 else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: descriptor, eventMask: .write, queue: .main
+        )
+        source.setEventHandler { [weak self] in self?.handleScreenshotRequestIfPresent() }
+        source.setCancelHandler { close(descriptor) }
+        source.resume()
+        screenshotRequestSource = source
+        handleScreenshotRequestIfPresent()
+    }
+
+    private func handleScreenshotRequestIfPresent() {
+        let request = Self.screenshotsDirectory.appendingPathComponent("request")
+        guard FileManager.default.fileExists(atPath: request.path) else { return }
+        try? FileManager.default.removeItem(at: request)
+        writeScreenshots()
+    }
+
+    private func writeScreenshots() {
         Task { @MainActor in
-            let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            let directory = support.appendingPathComponent("Snoopy Wallpaper/Screenshots", isDirectory: true)
-            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let directory = Self.screenshotsDirectory
             // The panel only fetches live frames while it is visible; pretend
             // it is for the render so the preview is a real frame.
             let wasVisible = model.panelVisible

@@ -102,6 +102,21 @@ black, hosting a `SnoopySceneView` driven by its own 30 Hz clock
 (`startClock()`); HEIC sequences advance from a `CVDisplayLink` inside the view.
 This is the recipe Aerial's desktop mode and other wallpaper apps use.
 
+## Where to keep the media
+
+Put `SnoopyAssets` (or an APFS clone of it) somewhere that is not consent-protected. An app
+launched by LaunchServices needs Files & Folders permission for anything under `~/Documents`,
+`~/Desktop` or `~/Downloads`, and macOS asks with a dialog that blocks the app's first media
+`open()` until it is answered; because the local build is signed ad hoc, the grant does not
+survive a rebuild either. The build script links the bundle to the physical folder and warns
+when that folder is inside one of those locations. A clone costs no space on APFS:
+
+```sh
+mkdir -p ~/Library/Application\ Support/Snoopy\ Wallpaper
+cp -Rc ~/Documents/…/SnoopyAssets ~/Library/Application\ Support/Snoopy\ Wallpaper/SnoopyAssets
+ln -sfn ~/Library/Application\ Support/Snoopy\ Wallpaper/SnoopyAssets Resources/SnoopyAssets
+```
+
 ## First run and troubleshooting
 
 1. `sh scripts/build_wallpaper_app.sh` then `open .build/SnoopyWallpaper.app` — a dog icon

@@ -123,7 +123,22 @@ case "$ASSETS_MODE" in
     fi
     ;;
   link)
-    ln -s "$ROOT/Resources/SnoopyAssets" "$OUT/Contents/Resources/SnoopyAssets"
+    # Link to the physical folder, not to the checkout: an app launched by
+    # LaunchServices needs Files & Folders consent for anything it opens under
+    # Documents, Desktop or Downloads, and the consent prompt blocks the first
+    # media open() until someone answers it. Keep the media (or an APFS clone
+    # of it, `cp -Rc`) outside those folders, e.g. in
+    # ~/Library/Application Support/Snoopy Wallpaper/SnoopyAssets.
+    ASSETS_PHYSICAL="$(cd "$ROOT/Resources/SnoopyAssets" 2>/dev/null && pwd -P)"
+    if [ -z "$ASSETS_PHYSICAL" ]; then
+      echo "warning: $ROOT/Resources/SnoopyAssets not found — the app will have no media (see README)" >&2
+    else
+      case "$ASSETS_PHYSICAL" in
+        "$HOME/Documents"/*|"$HOME/Desktop"/*|"$HOME/Downloads"/*)
+          echo "warning: media at $ASSETS_PHYSICAL is inside a consent-protected folder; the wallpaper app will hang on its first video until you allow access (see docs/WALLPAPER.md)" >&2 ;;
+      esac
+      ln -s "$ASSETS_PHYSICAL" "$OUT/Contents/Resources/SnoopyAssets"
+    fi
     ;;
   none) ;;
   *) echo "SNOOPY_ASSETS must be copy, link or none" >&2; exit 2 ;;

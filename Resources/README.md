@@ -6,6 +6,11 @@ Download the asset package from one of the links below,
 
 then extract it and place the `SnoopyAssets` folder inside this `Resources` folder.
 
+> **Wallpaper app users:** keep this folder (or an APFS clone, `cp -Rc`) outside `~/Documents`,
+> `~/Desktop` and `~/Downloads`, for example in `~/Library/Application Support/Snoopy Wallpaper/`;
+> see docs/WALLPAPER.md, "Where to keep the media".
+
+
 ---
 
 Google Drive
