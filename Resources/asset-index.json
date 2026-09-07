@@ -47576,6 +47576,2586 @@
         "majorVersion": 1,
         "minorVersion": 0
       }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_AP001_To_RPD",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 98274,
+          "name": "101_AP001_To_RPD.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_AP001_To_RPD.icasset/101_AP001_To_RPD.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_AP001"
+      },
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_AP001_To_RPD.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_AP001_To_RPD",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_AP001_To_RPD.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_AP002_To_RPD",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 103613,
+          "name": "101_AP002_To_RPD.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_AP002_To_RPD.icasset/101_AP002_To_RPD.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_AP002"
+      },
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_AP002_To_RPD.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_AP002_To_RPD",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_AP002_To_RPD.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_AP003_To_RPD",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 90819,
+          "name": "101_AP003_To_RPD.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_AP003_To_RPD.icasset/101_AP003_To_RPD.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_AP003"
+      },
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_AP003_To_RPD.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_AP003_To_RPD",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_AP003_To_RPD.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_AP007_To_RPD",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 156558,
+          "name": "101_AP007_To_RPD.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_AP007_To_RPD.icasset/101_AP007_To_RPD.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_AP007"
+      },
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_AP007_To_RPD.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_AP007_To_RPD",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_AP007_To_RPD.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_BP001_To_RPD",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 152945,
+          "name": "101_BP001_To_RPD.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_BP001_To_RPD.icasset/101_BP001_To_RPD.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_BP001"
+      },
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_BP001_To_RPD.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_BP001_To_RPD",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_BP001_To_RPD.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_BP002_To_RPD",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 144454,
+          "name": "101_BP002_To_RPD.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_BP002_To_RPD.icasset/101_BP002_To_RPD.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_BP002"
+      },
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_BP002_To_RPD.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_BP002_To_RPD",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_BP002_To_RPD.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_BP003_To_RPD",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 156103,
+          "name": "101_BP003_To_RPD.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_BP003_To_RPD.icasset/101_BP003_To_RPD.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_BP003"
+      },
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_BP003_To_RPD.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_BP003_To_RPD",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_BP003_To_RPD.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_BP004_To_RPD",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 134736,
+          "name": "101_BP004_To_RPD.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_BP004_To_RPD.icasset/101_BP004_To_RPD.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_BP004"
+      },
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_BP004_To_RPD.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_BP004_To_RPD",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_BP004_To_RPD.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RPD001",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 2137858,
+          "name": "101_RPD001.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RPD001.icasset/101_RPD001.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionPose",
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RPD001.icasset",
+      "relevancyData": {
+        "dependencies": [],
+        "exclusions": [],
+        "info": [
+          {
+            "reactionTrigger": {
+              "reactionTrigger": "doorbell"
+            }
+          }
+        ]
+      },
+      "sprites": [
+        {
+          "assetBaseName": "101_RPD001",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RPD001.mov"
+          ],
+          "metadataPath": "characterReactionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RPD_Loop",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 228506,
+          "name": "101_RPD_Loop.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RPD_Loop.icasset/101_RPD_Loop.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionPose",
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RPD_Loop.icasset",
+      "relevancyData": {
+        "dependencies": [],
+        "exclusions": [],
+        "info": [
+          {
+            "reactionTrigger": {
+              "reactionTrigger": "generic"
+            }
+          }
+        ]
+      },
+      "sprites": [
+        {
+          "assetBaseName": "101_RPD_Loop",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RPD_Loop.mov"
+          ],
+          "metadataPath": "characterReactionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RPD_To_BP001",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 176132,
+          "name": "101_RPD_To_BP001.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RPD_To_BP001.icasset/101_RPD_To_BP001.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "endCharacterPoseID": "101_BP001",
+        "kind": "exit"
+      },
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RPD_To_BP001.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_RPD_To_BP001",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RPD_To_BP001.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RPD_To_BP002",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 196285,
+          "name": "101_RPD_To_BP002.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RPD_To_BP002.icasset/101_RPD_To_BP002.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "endCharacterPoseID": "101_BP002",
+        "kind": "exit"
+      },
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RPD_To_BP002.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_RPD_To_BP002",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RPD_To_BP002.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RPD_To_BP003",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 130925,
+          "name": "101_RPD_To_BP003.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RPD_To_BP003.icasset/101_RPD_To_BP003.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "endCharacterPoseID": "101_BP003",
+        "kind": "exit"
+      },
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RPD_To_BP003.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_RPD_To_BP003",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RPD_To_BP003.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RPD_To_BP004",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 173630,
+          "name": "101_RPD_To_BP004.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RPD_To_BP004.icasset/101_RPD_To_BP004.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "endCharacterPoseID": "101_BP004",
+        "kind": "exit"
+      },
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RPD_To_BP004.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_RPD_To_BP004",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RPD_To_BP004.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RPH_Loop",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 246151,
+          "name": "101_RPH_Loop.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RPH_Loop.icasset/101_RPH_Loop.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionPose",
+      "reactionStyleID": "standardReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RPH_Loop.icasset",
+      "relevancyData": {
+        "dependencies": [],
+        "exclusions": [],
+        "info": [
+          {
+            "reactionTrigger": {
+              "reactionTrigger": "generic"
+            }
+          }
+        ]
+      },
+      "sprites": [
+        {
+          "assetBaseName": "101_RPH_Loop",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RPH_Loop.mov"
+          ],
+          "metadataPath": "characterReactionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RWD001",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 2044213,
+          "name": "101_RWD001.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RWD001.icasset/101_RWD001.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionPose",
+      "reactionStyleID": "alternateWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RWD001.icasset",
+      "relevancyData": {
+        "dependencies": [],
+        "exclusions": [],
+        "info": [
+          {
+            "reactionTrigger": {
+              "reactionTrigger": "doorbell"
+            }
+          }
+        ]
+      },
+      "sprites": [
+        {
+          "assetBaseName": "101_RWD001",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RWD001.mov"
+          ],
+          "metadataPath": "characterReactionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RWD_To_BP001",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 176132,
+          "name": "101_RWD_To_BP001.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RWD_To_BP001.icasset/101_RWD_To_BP001.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "endCharacterPoseID": "101_BP001",
+        "kind": "exit"
+      },
+      "reactionStyleID": "alternateWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RWD_To_BP001.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_RWD_To_BP001",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RWD_To_BP001.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RWD_To_BP002",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 196285,
+          "name": "101_RWD_To_BP002.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RWD_To_BP002.icasset/101_RWD_To_BP002.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "endCharacterPoseID": "101_BP002",
+        "kind": "exit"
+      },
+      "reactionStyleID": "alternateWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RWD_To_BP002.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_RWD_To_BP002",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RWD_To_BP002.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RWD_To_BP003",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 130925,
+          "name": "101_RWD_To_BP003.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RWD_To_BP003.icasset/101_RWD_To_BP003.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "endCharacterPoseID": "101_BP003",
+        "kind": "exit"
+      },
+      "reactionStyleID": "alternateWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RWD_To_BP003.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_RWD_To_BP003",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RWD_To_BP003.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RWD_To_BP004",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 173630,
+          "name": "101_RWD_To_BP004.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RWD_To_BP004.icasset/101_RWD_To_BP004.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "endCharacterPoseID": "101_BP004",
+        "kind": "exit"
+      },
+      "reactionStyleID": "alternateWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RWD_To_BP004.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_RWD_To_BP004",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RWD_To_BP004.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RWH_To_BP001",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 174842,
+          "name": "101_RWH_To_BP001.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RWH_To_BP001.icasset/101_RWH_To_BP001.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "endCharacterPoseID": "101_BP001",
+        "kind": "exit"
+      },
+      "reactionStyleID": "standardWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RWH_To_BP001.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_RWH_To_BP001",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RWH_To_BP001.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RWH_To_BP002",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 241711,
+          "name": "101_RWH_To_BP002.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RWH_To_BP002.icasset/101_RWH_To_BP002.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "endCharacterPoseID": "101_BP002",
+        "kind": "exit"
+      },
+      "reactionStyleID": "standardWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RWH_To_BP002.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_RWH_To_BP002",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RWH_To_BP002.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RWH_To_BP003",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 144834,
+          "name": "101_RWH_To_BP003.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RWH_To_BP003.icasset/101_RWH_To_BP003.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "endCharacterPoseID": "101_BP003",
+        "kind": "exit"
+      },
+      "reactionStyleID": "standardWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RWH_To_BP003.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_RWH_To_BP003",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RWH_To_BP003.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "101_RWH_To_BP004",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 215825,
+          "name": "101_RWH_To_BP004.mov",
+          "relativePath": "idlechara_defaultV2_v1/101_RWH_To_BP004.icasset/101_RWH_To_BP004.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "endCharacterPoseID": "101_BP004",
+        "kind": "exit"
+      },
+      "reactionStyleID": "standardWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/101_RWH_To_BP004.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "101_RWH_To_BP004",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "101_RWH_To_BP004.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "103_AP001_To_RPH",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 138878,
+          "name": "103_AP001_To_RPH.mov",
+          "relativePath": "idlechara_defaultV2_v1/103_AP001_To_RPH.icasset/103_AP001_To_RPH.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_AP001"
+      },
+      "reactionStyleID": "standardReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/103_AP001_To_RPH.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "103_AP001_To_RPH",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "103_AP001_To_RPH.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "103_AP002_To_RPH",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 142365,
+          "name": "103_AP002_To_RPH.mov",
+          "relativePath": "idlechara_defaultV2_v1/103_AP002_To_RPH.icasset/103_AP002_To_RPH.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_AP002"
+      },
+      "reactionStyleID": "standardReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/103_AP002_To_RPH.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "103_AP002_To_RPH",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "103_AP002_To_RPH.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "103_AP003_To_RPH",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 111937,
+          "name": "103_AP003_To_RPH.mov",
+          "relativePath": "idlechara_defaultV2_v1/103_AP003_To_RPH.icasset/103_AP003_To_RPH.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_AP003"
+      },
+      "reactionStyleID": "standardReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/103_AP003_To_RPH.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "103_AP003_To_RPH",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "103_AP003_To_RPH.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "103_AP007_To_RPH",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 138941,
+          "name": "103_AP007_To_RPH.mov",
+          "relativePath": "idlechara_defaultV2_v1/103_AP007_To_RPH.icasset/103_AP007_To_RPH.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_AP007"
+      },
+      "reactionStyleID": "standardReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/103_AP007_To_RPH.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "103_AP007_To_RPH",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "103_AP007_To_RPH.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "103_AP021_To_RWD",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 255297,
+          "name": "103_AP021_To_RWD.mov",
+          "relativePath": "idlechara_defaultV2_v1/103_AP021_To_RWD.icasset/103_AP021_To_RWD.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "103_AP021"
+      },
+      "reactionStyleID": "alternateWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/103_AP021_To_RWD.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "103_AP021_To_RWD",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "103_AP021_To_RWD.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "103_AP021_To_RWH",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 201429,
+          "name": "103_AP021_To_RWH.mov",
+          "relativePath": "idlechara_defaultV2_v1/103_AP021_To_RWH.icasset/103_AP021_To_RWH.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "103_AP021"
+      },
+      "reactionStyleID": "standardWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/103_AP021_To_RWH.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "103_AP021_To_RWH",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "103_AP021_To_RWH.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "103_RPH002",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 786130,
+          "name": "103_RPH002.mov",
+          "relativePath": "idlechara_defaultV2_v1/103_RPH002.icasset/103_RPH002.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionPose",
+      "reactionStyleID": "standardReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/103_RPH002.icasset",
+      "relevancyData": {
+        "dependencies": [],
+        "exclusions": [],
+        "info": [
+          {
+            "reactionTrigger": {
+              "reactionTrigger": "alarm"
+            }
+          }
+        ]
+      },
+      "sprites": [
+        {
+          "assetBaseName": "103_RPH002",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "103_RPH002.mov"
+          ],
+          "metadataPath": "characterReactionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "103_RWH002",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 980228,
+          "name": "103_RWH002.mov",
+          "relativePath": "idlechara_defaultV2_v1/103_RWH002.icasset/103_RWH002.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionPose",
+      "reactionStyleID": "standardWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/103_RWH002.icasset",
+      "relevancyData": {
+        "dependencies": [],
+        "exclusions": [],
+        "info": [
+          {
+            "reactionTrigger": {
+              "reactionTrigger": "alarm"
+            }
+          }
+        ]
+      },
+      "sprites": [
+        {
+          "assetBaseName": "103_RWH002",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "103_RWH002.mov"
+          ],
+          "metadataPath": "characterReactionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "104_AP010_To_RWD",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 549229,
+          "name": "104_AP010_To_RWD.mov",
+          "relativePath": "idlechara_defaultV2_v1/104_AP010_To_RWD.icasset/104_AP010_To_RWD.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_AP010"
+      },
+      "reactionStyleID": "alternateWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/104_AP010_To_RWD.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "104_AP010_To_RWD",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "104_AP010_To_RWD.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "104_AP010_To_RWH",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 553643,
+          "name": "104_AP010_To_RWH.mov",
+          "relativePath": "idlechara_defaultV2_v1/104_AP010_To_RWH.icasset/104_AP010_To_RWH.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "101_AP010"
+      },
+      "reactionStyleID": "standardWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/104_AP010_To_RWH.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "104_AP010_To_RWH",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "104_AP010_To_RWH.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "104_AP028_To_RPD",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 188068,
+          "name": "104_AP028_To_RPD.mov",
+          "relativePath": "idlechara_defaultV2_v1/104_AP028_To_RPD.icasset/104_AP028_To_RPD.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "104_AP028"
+      },
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/104_AP028_To_RPD.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "104_AP028_To_RPD",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "104_AP028_To_RPD.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "104_AP028_To_RPH",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 188836,
+          "name": "104_AP028_To_RPH.mov",
+          "relativePath": "idlechara_defaultV2_v1/104_AP028_To_RPH.icasset/104_AP028_To_RPH.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "104_AP028"
+      },
+      "reactionStyleID": "standardReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/104_AP028_To_RPH.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "104_AP028_To_RPH",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "104_AP028_To_RPH.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "104_AP031_To_RWD",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 385541,
+          "name": "104_AP031_To_RWD.mov",
+          "relativePath": "idlechara_defaultV2_v1/104_AP031_To_RWD.icasset/104_AP031_To_RWD.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "104_AP031"
+      },
+      "reactionStyleID": "alternateWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/104_AP031_To_RWD.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "104_AP031_To_RWD",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "104_AP031_To_RWD.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "104_AP031_To_RWH",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 436267,
+          "name": "104_AP031_To_RWH.mov",
+          "relativePath": "idlechara_defaultV2_v1/104_AP031_To_RWH.icasset/104_AP031_To_RWH.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionTransitionPose",
+      "phase": {
+        "kind": "enter",
+        "startCharacterPoseID": "104_AP031"
+      },
+      "reactionStyleID": "standardWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/104_AP031_To_RWH.icasset",
+      "relevancyData": {},
+      "sprites": [
+        {
+          "assetBaseName": "104_AP031_To_RWH",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "104_AP031_To_RWH.mov"
+          ],
+          "metadataPath": "characterReactionTransitionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "104_RPD005",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 685809,
+          "name": "104_RPD005.mov",
+          "relativePath": "idlechara_defaultV2_v1/104_RPD005.icasset/104_RPD005.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionPose",
+      "reactionStyleID": "alternateReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/104_RPD005.icasset",
+      "relevancyData": {
+        "dependencies": [],
+        "exclusions": [],
+        "info": [
+          {
+            "reactionTrigger": {
+              "reactionTrigger": "presence"
+            }
+          }
+        ]
+      },
+      "sprites": [
+        {
+          "assetBaseName": "104_RPD005",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "104_RPD005.mov"
+          ],
+          "metadataPath": "characterReactionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "104_RPH003",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 1078390,
+          "name": "104_RPH003.mov",
+          "relativePath": "idlechara_defaultV2_v1/104_RPH003.icasset/104_RPH003.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionPose",
+      "reactionStyleID": "standardReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/104_RPH003.icasset",
+      "relevancyData": {
+        "dependencies": [],
+        "exclusions": [],
+        "info": [
+          {
+            "reactionTrigger": {
+              "reactionTrigger": "music"
+            }
+          }
+        ]
+      },
+      "sprites": [
+        {
+          "assetBaseName": "104_RPH003",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "104_RPH003.mov"
+          ],
+          "metadataPath": "characterReactionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "104_RPH004",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 611940,
+          "name": "104_RPH004.mov",
+          "relativePath": "idlechara_defaultV2_v1/104_RPH004.icasset/104_RPH004.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionPose",
+      "reactionStyleID": "standardReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/104_RPH004.icasset",
+      "relevancyData": {
+        "dependencies": [],
+        "exclusions": [],
+        "info": [
+          {
+            "reactionTrigger": {
+              "reactionTrigger": "environment"
+            }
+          }
+        ]
+      },
+      "sprites": [
+        {
+          "assetBaseName": "104_RPH004",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "104_RPH004.mov"
+          ],
+          "metadataPath": "characterReactionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "104_RWD005",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 778515,
+          "name": "104_RWD005.mov",
+          "relativePath": "idlechara_defaultV2_v1/104_RWD005.icasset/104_RWD005.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionPose",
+      "reactionStyleID": "alternateWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/104_RWD005.icasset",
+      "relevancyData": {
+        "dependencies": [],
+        "exclusions": [],
+        "info": [
+          {
+            "reactionTrigger": {
+              "reactionTrigger": "presence"
+            }
+          }
+        ]
+      },
+      "sprites": [
+        {
+          "assetBaseName": "104_RWD005",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "104_RWD005.mov"
+          ],
+          "metadataPath": "characterReactionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "104_RWH003",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 1171418,
+          "name": "104_RWH003.mov",
+          "relativePath": "idlechara_defaultV2_v1/104_RWH003.icasset/104_RWH003.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionPose",
+      "reactionStyleID": "standardWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/104_RWH003.icasset",
+      "relevancyData": {
+        "dependencies": [],
+        "exclusions": [],
+        "info": [
+          {
+            "reactionTrigger": {
+              "reactionTrigger": "music"
+            }
+          }
+        ]
+      },
+      "sprites": [
+        {
+          "assetBaseName": "104_RWH003",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "104_RWH003.mov"
+          ],
+          "metadataPath": "characterReactionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
+    },
+    {
+      "bundle": "idlechara_defaultV2_v1",
+      "id": "104_RWH004",
+      "integrity": {
+        "mediaFileCount": 1,
+        "metadata": true,
+        "missingMedia": [],
+        "valid": true
+      },
+      "media": [
+        {
+          "bytes": 704233,
+          "name": "104_RWH004.mov",
+          "relativePath": "idlechara_defaultV2_v1/104_RWH004.icasset/104_RWH004.mov",
+          "suffix": ".mov"
+        }
+      ],
+      "metadataType": "characterReactionPose",
+      "reactionStyleID": "standardWithCompanionReactionTransitionStyleID",
+      "relativePath": "idlechara_defaultV2_v1/104_RWH004.icasset",
+      "relevancyData": {
+        "dependencies": [],
+        "exclusions": [],
+        "info": [
+          {
+            "reactionTrigger": {
+              "reactionTrigger": "environment"
+            }
+          }
+        ]
+      },
+      "sprites": [
+        {
+          "assetBaseName": "104_RWH004",
+          "assetSize": [
+            1920.0,
+            1080.0
+          ],
+          "customTiming": null,
+          "endBehavior": "freeze",
+          "frameIndexDigitCount": 2,
+          "mediaFiles": [
+            "104_RWH004.mov"
+          ],
+          "metadataPath": "characterReactionPose._0.assetContainer.content.oneShotSprites.oneShotSprites.sprites.0",
+          "phase": "oneShot",
+          "placement": {
+            "anchored": {
+              "alignment": "center",
+              "to": "viewport"
+            }
+          },
+          "plane": "foregroundCharacter",
+          "spriteType": "video"
+        }
+      ],
+      "status": null,
+      "transitionCategoryIDs": [],
+      "version": {
+        "majorVersion": 2,
+        "minorVersion": 0
+      }
     }
   ],
   "bundles": [
@@ -47618,13 +50198,17 @@
     {
       "assetCount": 10,
       "name": "idlechara_bundle8_4K_v1"
+    },
+    {
+      "assetCount": 44,
+      "name": "idlechara_defaultV2_v1"
     }
   ],
   "errors": [],
   "schemaVersion": 1,
   "summary": {
-    "assetCount": 397,
-    "bundleCount": 10,
+    "assetCount": 441,
+    "bundleCount": 11,
     "invalidAssetCount": 0,
     "videoTimingCount": 73
   }

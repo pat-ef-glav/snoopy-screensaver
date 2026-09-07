@@ -9,6 +9,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: swift --version
+      # The asset index must re-serialise byte-for-byte with Tools/build_asset_index.py
+      # (no media needed); `validate` additionally needs Resources/SnoopyAssets.
+      - run: python3 Tools/build_asset_index.py round-trip
       # Builds every product, including the SnoopyWallpaper menu-bar app.
       - run: swift build -c release
       - run: swift test

@@ -16,7 +16,11 @@ DerivedData/
 # Local Apple TV media and machine-specific generated index. These are large,
 # may contain absolute paths, and are not part of the source distribution.
 Resources/SnoopyAssets/
+Resources/SnoopyAssets
 
 # Local diagnostics
 *.log
 *.xcresult
+
+# Python tool caches
+__pycache__/

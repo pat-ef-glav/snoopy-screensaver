@@ -1,5 +1,10 @@
 # Handoff: integrate the newer reaction-pose clips into Snoopy-Screensaver
 
+> **Status (2026-09-07):** done. The clips turned out to be Apple's V2 reaction-pose bundle and their
+> metadata was found in the tvOS 26.5 simulator runtime; the decoded model, the evidence and the
+> engine integration are documented in [REACTION_POSES.md](REACTION_POSES.md). The index builder is
+> `Tools/build_asset_index.py`. This brief is kept as the original task description.
+
 You are working in a local clone of `pat-ef-glav/snoopy-screensaver` (fork of
 `dingdangnao/Snoopy-Screensaver`), branch `claude/snoopy-wallpaper-8fmsgn`, on a Mac
 with Xcode. You can read the source, the 7.2 GB Apple asset package, and the user's own

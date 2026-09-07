@@ -10,13 +10,13 @@ struct IndexSmoke {
         let bundledRoot = indexURL.deletingLastPathComponent().appendingPathComponent("SnoopyAssets")
         let store = try AssetStore(indexURL: indexURL, assetsRootOverride: bundledRoot)
         let playable = store.playableAssets()
-        guard store.index.assets.count == 397, playable.count == 284, store.activeScenes().count == 73 else {
+        guard store.index.assets.count == 441, playable.count == 328, store.activeScenes().count == 73 else {
             throw NSError(domain: "IndexSmoke", code: 3, userInfo: [NSLocalizedDescriptionKey: "unexpected inventory: total=\(store.index.assets.count), playable=\(playable.count), activeScenes=\(store.activeScenes().count)"])
         }
         let firstURL = try store.url(for: playable[0])
         guard FileManager.default.fileExists(atPath: firstURL.path) else {
             throw NSError(domain: "IndexSmoke", code: 4, userInfo: [NSLocalizedDescriptionKey: "missing first asset directory: \(firstURL.path)"])
         }
-        print("index smoke OK: 397 indexed, 284 media assets, 73 active scenes")
+        print("index smoke OK: 441 indexed, 328 media assets, 73 active scenes")
     }
 }
