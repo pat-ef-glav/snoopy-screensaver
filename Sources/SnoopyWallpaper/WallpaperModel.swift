@@ -18,8 +18,6 @@ final class WallpaperModel: ObservableObject {
     @Published private(set) var isEnabled = SnoopyPreferences.wallpaperEnabled
     @Published private(set) var wallpaperRate = SnoopyPreferences.playbackRate(for: .wallpaper)
     @Published private(set) var saverRate = SnoopyPreferences.playbackRate(for: .screenSaver)
-    @Published private(set) var onBatteryMode = SnoopyPreferences.onBatteryMode
-    @Published private(set) var pauseWhenHidden = SnoopyPreferences.pauseWhenHidden
     @Published private(set) var launchAtLogin = false
     @Published private(set) var weatherText = ""
     @Published private(set) var weatherEnabled = SnoopyPreferences.weatherEnabled
@@ -87,8 +85,6 @@ final class WallpaperModel: ObservableObject {
         isEnabled = SnoopyPreferences.wallpaperEnabled
         wallpaperRate = SnoopyPreferences.playbackRate(for: .wallpaper)
         saverRate = SnoopyPreferences.playbackRate(for: .screenSaver)
-        onBatteryMode = SnoopyPreferences.onBatteryMode
-        pauseWhenHidden = SnoopyPreferences.pauseWhenHidden
         launchAtLogin = launchAtLoginAvailable && LaunchAtLogin.isEnabled
         weatherEnabled = SnoopyPreferences.weatherEnabled
         weatherText = Self.describeWeather()
@@ -167,15 +163,14 @@ final class WallpaperModel: ObservableObject {
         }
     }
 
+    /// "Toronto · Clear · checked 3 min ago" (the fetch time, not the
+    /// service's quarter-hour observation time).
     private static func describeWeather() -> String {
-        guard SnoopyPreferences.weatherEnabled else { return "Weather linking is off" }
+        guard SnoopyPreferences.weatherEnabled else { return "Off" }
         guard let snapshot = SnoopyPreferences.weatherSnapshot(), snapshot.isUsable else {
-            return "No weather cached yet"
+            return "No weather yet"
         }
-        let time = DateFormatter.localizedString(from: snapshot.observedAt, dateStyle: .none, timeStyle: .short)
-        let place = snapshot.locationName
-            ?? SnoopyPreferences.defaults.string(forKey: SnoopyPreferences.cityNameKey) ?? "Weather"
-        return "\(place) · \(snapshot.conditions.joined(separator: ", ")) · \(time)"
+        return snapshot.summary()
     }
 
     // MARK: - Playback labels
@@ -333,16 +328,6 @@ final class WallpaperModel: ObservableObject {
         saverRate = SnoopyPreferences.playbackRate(for: .screenSaver)
     }
 
-    func setOnBatteryMode(_ mode: SnoopyOnBatteryMode) {
-        controller.setOnBatteryMode(mode)
-        refresh()
-    }
-
-    func setPauseWhenHidden(_ pause: Bool) {
-        controller.setPauseWhenHidden(pause)
-        refresh()
-    }
-
     func setLaunchAtLogin(_ enabled: Bool) {
         do {
             try LaunchAtLogin.setEnabled(enabled)
@@ -372,11 +357,8 @@ final class WallpaperModel: ObservableObject {
         refresh()
     }
 
-    func showWeatherSettings() {
-        let window = weatherController.window
-        (window as? NSPanel)?.hidesOnDeactivate = false
-        window.center()
-        window.makeKeyAndOrderFront(nil)
+    func showSettings(tab: SnoopySettingsTab) {
+        weatherController.show(tab: tab)
         NSApp.activate(ignoringOtherApps: true)
     }
 

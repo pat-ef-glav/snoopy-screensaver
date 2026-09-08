@@ -19,7 +19,7 @@ struct StatusPanelView: View {
             Divider()
             sceneSection
             Divider()
-            playbackSection
+            speedSection
             Divider()
             weatherSection
             Divider()
@@ -41,6 +41,9 @@ struct StatusPanelView: View {
                 Text(model.status).font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
+            Button { model.showSettings(tab: .playback) } label: { Image(systemName: "gearshape") }
+                .buttonStyle(PanelButtonStyle(compact: true))
+                .help("Settings…")
             Toggle("", isOn: Binding(get: { model.isEnabled }, set: { model.setEnabled($0) }))
                 .toggleStyle(.switch)
                 .labelsHidden()
@@ -81,38 +84,19 @@ struct StatusPanelView: View {
         }
     }
 
-    /// Speed (the two pop-ups beside the title when they fit on one line,
-    /// under it otherwise), On Battery (laptops only) and Pause When Covered
-    /// by Windows.
-    private var playbackSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) {
-                    rowTitle("Speed")
-                    Spacer(minLength: 0)
-                    speedPickers
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    rowTitle("Speed")
-                    HStack(spacing: 12) { speedPickers }
-                }
+    /// Speed: the two pop-ups beside the title when they fit on one line,
+    /// under it otherwise. Power settings live in the settings window.
+    private var speedSection: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                rowTitle("Speed")
+                Spacer(minLength: 0)
+                speedPickers
             }
-            if model.hasBattery {
-                HStack {
-                    rowTitle("On Battery")
-                    Spacer()
-                    Picker("On Battery", selection: Binding(get: { model.onBatteryMode }, set: { model.setOnBatteryMode($0) })) {
-                        ForEach(SnoopyOnBatteryMode.allCases, id: \.self) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
-                }
+            VStack(alignment: .leading, spacing: 6) {
+                rowTitle("Speed")
+                HStack(spacing: 12) { speedPickers }
             }
-            switchRow("Pause When Covered by Windows",
-                      isOn: Binding(get: { model.pauseWhenHidden }, set: { model.setPauseWhenHidden($0) }))
         }
     }
 
@@ -121,25 +105,27 @@ struct StatusPanelView: View {
         ratePicker("Screen Saver", value: model.saverRate) { model.setSaverRate($0) }
     }
 
-    /// "place · conditions · time": a long line loses the middle of the
-    /// conditions, never the time, which is what tells whether it is fresh.
+    /// "Weather  Toronto · Clear · checked 3 min ago": the row opens the
+    /// weather settings; the button on the right fetches now.
     private var weatherSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                rowTitle("Weather")
-                Text(model.weatherText)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 0)
-                Button { model.refreshWeather() } label: { Image(systemName: "arrow.clockwise") }
-                    .buttonStyle(PanelButtonStyle(compact: true))
-                    .help("Fetch the weather now")
-                    .disabled(!model.weatherEnabled)
+        HStack(spacing: 8) {
+            Button { model.showSettings(tab: .weather) } label: {
+                HStack(spacing: 8) {
+                    rowTitle("Weather")
+                    Text(model.weatherText)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 0)
+                }
             }
-            Button("Weather & Screen Saver Settings…") { model.showWeatherSettings() }
-                .buttonStyle(MenuRowButtonStyle())
+            .buttonStyle(MenuRowButtonStyle())
+            .help("Weather settings…")
+            Button { model.refreshWeather() } label: { Image(systemName: "arrow.clockwise") }
+                .buttonStyle(PanelButtonStyle(compact: true))
+                .help("Fetch the weather now")
+                .disabled(!model.weatherEnabled)
         }
     }
 
@@ -171,14 +157,6 @@ struct StatusPanelView: View {
         .font(.body)
         .lineLimit(1)
         .truncationMode(.tail)
-    }
-
-    private func switchRow(_ title: String, isOn: Binding<Bool>) -> some View {
-        HStack {
-            Text(title).font(.body)
-            Spacer()
-            Toggle("", isOn: isOn).toggleStyle(.switch).labelsHidden()
-        }
     }
 
     /// A labelled pop-up over `SnoopyPreferences.playbackRateChoices`. A stored

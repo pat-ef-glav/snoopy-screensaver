@@ -1,14 +1,15 @@
 import AppKit
+import SnoopyTVCore
 
 /// Polls the window list once a second and reports when regular application
 /// windows cover most of a display — the signal for "pause when hidden". This
 /// is a port of Aerial's `DesktopOcclusionMonitor`: it grids the display into
 /// 50×50 cells, marks every cell touched by an on-screen window at a normal
 /// level (0 ≤ level < Dock) owned by another process, and compares the covered
-/// fraction against a threshold (Aerial's default 0.6).
+/// fraction against the user's threshold (`SnoopyPreferences.pauseCoverageThreshold`,
+/// Aerial's default 0.6).
 final class OcclusionMonitor {
     static let didChangeNotification = Notification.Name("SnoopyWallpaper.occlusionDidChange")
-    static let threshold = 0.6
 
     let displayID: CGDirectDisplayID
     private(set) var isOccluded = false
@@ -50,7 +51,7 @@ final class OcclusionMonitor {
         // Resolve the display's bounds on every poll so display rearrangement
         // and resolution changes heal on the next tick.
         let coverage = Self.coverage(for: CGDisplayBounds(displayID))
-        let nowOccluded = coverage >= Self.threshold
+        let nowOccluded = coverage >= SnoopyPreferences.pauseCoverageThreshold
         guard nowOccluded != isOccluded else { return }
         isOccluded = nowOccluded
         let monitor = self

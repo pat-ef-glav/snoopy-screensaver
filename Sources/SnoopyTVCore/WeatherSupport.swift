@@ -96,7 +96,8 @@ public struct SnoopyWeatherClient: Sendable {
             sunrise: sunrise,
             sunset: sunset,
             source: "Open-Meteo",
-            locationName: location.name
+            locationName: location.name,
+            fetchedAt: .now
         )
     }
 

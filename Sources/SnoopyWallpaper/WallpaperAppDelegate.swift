@@ -54,9 +54,39 @@ final class WallpaperAppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleScreenshotRequestIfPresent() {
         let request = Self.screenshotsDirectory.appendingPathComponent("request")
-        guard FileManager.default.fileExists(atPath: request.path) else { return }
-        try? FileManager.default.removeItem(at: request)
-        writeScreenshots()
+        if FileManager.default.fileExists(atPath: request.path) {
+            try? FileManager.default.removeItem(at: request)
+            writeScreenshots()
+        }
+        let settingsRequest = Self.screenshotsDirectory.appendingPathComponent("request-settings")
+        if FileManager.default.fileExists(atPath: settingsRequest.path) {
+            try? FileManager.default.removeItem(at: settingsRequest)
+            writeSettingsScreenshots()
+        }
+    }
+
+    /// `settings-<tab>.png` for each tab of a private settings window.
+    private func writeSettingsScreenshots() {
+        Task { @MainActor in
+            let directory = Self.screenshotsDirectory
+            let controller = SnoopyConfigurationController()
+            for tab in SnoopySettingsTab.allCases {
+                let window = controller.window
+                window.alphaValue = 0.01
+                window.level = .floating
+                window.ignoresMouseEvents = true
+                controller.show(tab: tab)
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                if let view = window.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                    view.cacheDisplay(in: view.bounds, to: rep)
+                    let image = NSImage(size: view.bounds.size)
+                    image.addRepresentation(rep)
+                    Self.writePNG(image, to: directory.appendingPathComponent("settings-\(tab.rawValue).png"))
+                }
+                window.orderOut(nil)
+            }
+            NSLog("SnoopyWallpaper: settings screenshots written to %@", directory.path)
+        }
     }
 
     private func writeScreenshots() {

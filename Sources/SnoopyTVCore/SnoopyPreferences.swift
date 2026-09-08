@@ -2,6 +2,8 @@ import Foundation
 
 public struct SnoopyWeatherSnapshot: Codable, Sendable, Equatable {
     public let conditions: [String]
+    /// The service's observation time (Open-Meteo rounds it to the quarter
+    /// hour), not when the app asked; see `fetchedAt`.
     public let observedAt: Date
     public let expiresAt: Date
     public let sunrise: Date?
@@ -9,11 +11,13 @@ public struct SnoopyWeatherSnapshot: Codable, Sendable, Equatable {
     public let previousDayConditions: [String]
     public let source: String?
     public let locationName: String?
+    /// When the app fetched this snapshot (nil in snapshots saved by older builds).
+    public let fetchedAt: Date?
 
     public init(conditions: [String], observedAt: Date = .now,
                 expiresAt: Date = .now.addingTimeInterval(3600), sunrise: Date? = nil,
                 sunset: Date? = nil, previousDayConditions: [String] = [],
-                source: String? = nil, locationName: String? = nil) {
+                source: String? = nil, locationName: String? = nil, fetchedAt: Date? = .now) {
         self.conditions = conditions
         self.observedAt = observedAt
         self.expiresAt = expiresAt
@@ -22,10 +26,41 @@ public struct SnoopyWeatherSnapshot: Codable, Sendable, Equatable {
         self.previousDayConditions = previousDayConditions
         self.source = source
         self.locationName = locationName
+        self.fetchedAt = fetchedAt
     }
 
     public var isUsable: Bool { expiresAt > .now.addingTimeInterval(-6 * 3600) }
     public var needsRefresh: Bool { expiresAt <= .now.addingTimeInterval(10 * 60) }
+
+    /// When the app last checked (the fetch time, falling back to the
+    /// observation time for old snapshots).
+    public var checkedAt: Date { fetchedAt ?? observedAt }
+
+    /// "Toronto" from "Toronto · Ontario · Canada".
+    public var cityName: String? {
+        locationName?.components(separatedBy: " · ").first?.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// "Clear, sunny" — the conditions as a sentence fragment.
+    public var conditionsText: String {
+        let joined = conditions.joined(separator: ", ")
+        return joined.prefix(1).uppercased() + joined.dropFirst()
+    }
+
+    /// "checked 3 min ago" / "checked just now".
+    public func checkedText(now: Date = .now) -> String {
+        let seconds = now.timeIntervalSince(checkedAt)
+        if seconds < 60 { return "checked just now" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return "checked " + formatter.localizedString(for: checkedAt, relativeTo: now)
+    }
+
+    /// "Toronto · Clear · checked 3 min ago" for a one-line status.
+    public func summary(now: Date = .now) -> String {
+        [cityName, conditionsText.isEmpty ? nil : conditionsText, checkedText(now: now)]
+            .compactMap { $0 }.joined(separator: " · ")
+    }
 }
 
 public struct SnoopyWeatherLocation: Codable, Sendable, Equatable {
@@ -95,6 +130,18 @@ public enum SnoopyPreferences {
     public static var pauseWhenHidden: Bool {
         get { defaults.object(forKey: pauseWhenHiddenKey) == nil ? true : defaults.bool(forKey: pauseWhenHiddenKey) }
         set { defaults.set(newValue, forKey: pauseWhenHiddenKey) }
+    }
+
+    public static let pauseCoverageThresholdKey = "SnoopyPauseCoverageThreshold"
+
+    /// Fraction of a display that other apps' windows must cover before the
+    /// wallpaper pauses there (0.3…0.95; Aerial's default 0.6).
+    public static var pauseCoverageThreshold: Double {
+        get {
+            let stored = defaults.double(forKey: pauseCoverageThresholdKey)
+            return stored > 0 ? min(max(stored, 0.3), 0.95) : 0.6
+        }
+        set { defaults.set(min(max(newValue, 0.3), 0.95), forKey: pauseCoverageThresholdKey) }
     }
 
     /// Whether the desktop wallpaper is shown (the menu-bar app's main toggle).

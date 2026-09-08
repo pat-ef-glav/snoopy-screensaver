@@ -1,211 +1,296 @@
 import AppKit
+import SwiftUI
 #if canImport(SnoopyTVCore)
 import SnoopyTVCore // Swift package build; the Xcode target compiles the core sources directly
 #endif
 
-private final class SnoopyConfigurationBackgroundView: NSView {
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.windowBackgroundColor.setFill()
-        dirtyRect.fill()
+public enum SnoopySettingsTab: String, CaseIterable, Identifiable, Sendable {
+    case weather
+    case playback
+
+    public var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .weather: return "Weather"
+        case .playback: return "Playback"
+        }
     }
 
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        needsDisplay = true
+    var symbol: String {
+        switch self {
+        case .weather: return "cloud.sun"
+        case .playback: return "play.rectangle"
+        }
     }
 }
 
-/// The Options sheet of the screen saver, also opened from the Snoopy Wallpaper
-/// menu: weather linking (city, Open-Meteo) and the screen saver's playback
-/// speed. Everything is stored in the shared `SnoopyPreferences` suite.
+/// State behind the settings window. Every control writes to
+/// `SnoopyPreferences` as it changes; the city is resolved and the weather
+/// fetched on Update Now, on Return in the field, and on Done when the city
+/// changed.
 @MainActor
-public final class SnoopyConfigurationController: NSObject {
-    private let panel: NSPanel
-    private let enabledButton = NSButton(checkboxWithTitle: "Match scenes and animations to the local weather", target: nil, action: nil)
-    private let cityField = NSTextField(string: "")
-    private let statusLabel = NSTextField(wrappingLabelWithString: "")
-    private let saveButton = NSButton(title: "Save & Update Weather", target: nil, action: nil)
-    private let speedPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
-
-    public override init() {
-        panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 390),
-            styleMask: [.titled], backing: .buffered, defer: false
-        )
-        super.init()
-        buildInterface()
+final class SnoopySettingsModel: ObservableObject {
+    @Published var tab: SnoopySettingsTab = .weather
+    @Published var weatherEnabled = SnoopyPreferences.weatherEnabled {
+        didSet {
+            guard !loading else { return }
+            SnoopyPreferences.weatherEnabled = weatherEnabled
+            refreshStatus()
+        }
+    }
+    @Published var city = ""
+    @Published var weatherStatus = ""
+    @Published var weatherError: String?
+    @Published var isUpdatingWeather = false
+    @Published var wallpaperRate = SnoopyPreferences.playbackRate(for: .wallpaper) {
+        didSet { if !loading { SnoopyPreferences.setPlaybackRate(wallpaperRate, for: .wallpaper) } }
+    }
+    @Published var saverRate = SnoopyPreferences.playbackRate(for: .screenSaver) {
+        didSet { if !loading { SnoopyPreferences.setPlaybackRate(saverRate, for: .screenSaver) } }
+    }
+    @Published var onBatteryMode = SnoopyPreferences.onBatteryMode {
+        didSet { if !loading { SnoopyPreferences.onBatteryMode = onBatteryMode } }
+    }
+    @Published var pauseWhenHidden = SnoopyPreferences.pauseWhenHidden {
+        didSet { if !loading { SnoopyPreferences.pauseWhenHidden = pauseWhenHidden } }
+    }
+    @Published var pauseCoverage = SnoopyPreferences.pauseCoverageThreshold {
+        didSet { if !loading { SnoopyPreferences.pauseCoverageThreshold = pauseCoverage } }
     }
 
-    public var window: NSWindow {
-        reload()
-        return panel
+    var onDone: (() -> Void)?
+    private var loading = false
+
+    private var savedCity: String {
+        SnoopyPreferences.defaults.string(forKey: SnoopyPreferences.cityNameKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
-    private func buildInterface() {
-        panel.title = "Snoopy Settings"
-        // Let the host supply Aqua or Dark Aqua to the complete view tree.
-        // A drawn semantic background stays in sync with the controls even in
-        // legacy screen-saver hosts that override a sheet's appearance after
-        // it has been created; a cached CGColor would not update here.
-        panel.isOpaque = true
-        panel.backgroundColor = .windowBackgroundColor
-        panel.contentView = SnoopyConfigurationBackgroundView(frame: panel.contentView?.bounds ?? .zero)
-        enabledButton.target = self
-        enabledButton.action = #selector(toggleWeather(_:))
-        cityField.placeholderString = "e.g. London, New York, Tokyo"
-
-        let title = NSTextField(labelWithString: "Weather")
-        title.font = .boldSystemFont(ofSize: 18)
-        title.textColor = .labelColor
-        let locationLabel = NSTextField(labelWithString: "Location")
-        locationLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        locationLabel.textColor = .labelColor
-        let explanation = NSTextField(wrappingLabelWithString:
-            "Type a city; no location permission is requested. Weather is cached for about an hour and only weights which scenes are chosen. Playback never waits for it."
-        )
-        explanation.textColor = .secondaryLabelColor
-        let source = NSTextField(wrappingLabelWithString:
-            "Free, key-less data source: Open-Meteo (WeatherKit is not used). If weather is unavailable, playback falls back to the normal logic."
-        )
-        source.textColor = .tertiaryLabelColor
-        source.font = .systemFont(ofSize: 11)
-        statusLabel.textColor = .secondaryLabelColor
-        statusLabel.maximumNumberOfLines = 2
-
-        let playbackTitle = NSTextField(labelWithString: "Playback")
-        playbackTitle.font = .boldSystemFont(ofSize: 18)
-        playbackTitle.textColor = .labelColor
-        let speedLabel = NSTextField(labelWithString: "Screen saver playback speed")
-        speedLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        speedLabel.textColor = .labelColor
-        speedPopUp.addItems(withTitles: SnoopyPreferences.playbackRateChoices.map(SnoopyPreferences.playbackRateTitle))
-        let speedRow = NSStackView(views: [speedLabel, speedPopUp])
-        speedRow.orientation = .horizontal
-        speedRow.spacing = 12
-        let speedNote = NSTextField(wrappingLabelWithString:
-            "The desktop wallpaper has its own speed in the Snoopy Wallpaper menu."
-        )
-        speedNote.textColor = .tertiaryLabelColor
-        speedNote.font = .systemFont(ofSize: 11)
-
-        let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancel(_:)))
-        saveButton.target = self
-        saveButton.action = #selector(saveAndRefresh(_:))
-        saveButton.keyEquivalent = "\r"
-        let buttons = NSStackView(views: [NSView(), cancelButton, saveButton])
-        buttons.orientation = .horizontal
-        buttons.spacing = 10
-
-        let stack = NSStackView(views: [
-            title, enabledButton, locationLabel, cityField, explanation, statusLabel, source,
-            playbackTitle, speedRow, speedNote, buttons,
-        ])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 10
-        stack.setCustomSpacing(22, after: source)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        cityField.translatesAutoresizingMaskIntoConstraints = false
-        explanation.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        source.translatesAutoresizingMaskIntoConstraints = false
-        speedNote.translatesAutoresizingMaskIntoConstraints = false
-        buttons.translatesAutoresizingMaskIntoConstraints = false
-        panel.contentView?.addSubview(stack)
-        guard let content = panel.contentView else { return }
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 22),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -18),
-            cityField.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            explanation.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            statusLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            source.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            speedNote.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            buttons.widthAnchor.constraint(equalTo: stack.widthAnchor),
-        ])
+    var cityChanged: Bool {
+        city.trimmingCharacters(in: .whitespacesAndNewlines) != savedCity
     }
 
-    private func reload() {
-        enabledButton.state = SnoopyPreferences.weatherEnabled ? .on : .off
-        cityField.stringValue = SnoopyPreferences.defaults.string(forKey: SnoopyPreferences.cityNameKey) ?? ""
-        if let snapshot = SnoopyPreferences.weatherSnapshot(), snapshot.isUsable {
-            let time = DateFormatter.localizedString(from: snapshot.observedAt, dateStyle: .none, timeStyle: .short)
-            statusLabel.stringValue = "Last updated: \(snapshot.locationName ?? cityField.stringValue) · \(snapshot.conditions.joined(separator: ", ")) · \(time)"
+    func reload() {
+        loading = true
+        defer { loading = false }
+        weatherEnabled = SnoopyPreferences.weatherEnabled
+        city = savedCity
+        weatherError = nil
+        wallpaperRate = SnoopyPreferences.playbackRate(for: .wallpaper)
+        saverRate = SnoopyPreferences.playbackRate(for: .screenSaver)
+        onBatteryMode = SnoopyPreferences.onBatteryMode
+        pauseWhenHidden = SnoopyPreferences.pauseWhenHidden
+        pauseCoverage = SnoopyPreferences.pauseCoverageThreshold
+        refreshStatus()
+    }
+
+    func refreshStatus() {
+        if !weatherEnabled {
+            weatherStatus = "Weather linking is off."
+        } else if let snapshot = SnoopyPreferences.weatherSnapshot(), snapshot.isUsable {
+            weatherStatus = snapshot.summary()
         } else {
-            statusLabel.stringValue = "No weather cached yet. It updates as soon as you save."
+            weatherStatus = "No weather yet."
         }
-        let current = SnoopyPreferences.playbackRate(for: .screenSaver)
-        let index = SnoopyPreferences.playbackRateChoices.firstIndex { abs($0 - current) < 0.001 }
-            ?? SnoopyPreferences.playbackRateChoices.firstIndex(of: 1.0) ?? 0
-        speedPopUp.selectItem(at: index)
-        updateEnabledState()
     }
 
-    @objc private func toggleWeather(_ sender: Any?) {
-        updateEnabledState()
-    }
-
-    private func updateEnabledState() {
-        cityField.isEnabled = enabledButton.state == .on
-        saveButton.title = enabledButton.state == .on ? "Save & Update Weather" : "Save"
-    }
-
-    private func savePlaybackSpeed() {
-        let index = speedPopUp.indexOfSelectedItem
-        guard SnoopyPreferences.playbackRateChoices.indices.contains(index) else { return }
-        SnoopyPreferences.setPlaybackRate(SnoopyPreferences.playbackRateChoices[index], for: .screenSaver)
-    }
-
-    @objc private func cancel(_ sender: Any?) {
-        finish(returnCode: .cancel)
-    }
-
-    @objc private func saveAndRefresh(_ sender: Any?) {
-        savePlaybackSpeed()
-        let enabled = enabledButton.state == .on
-        if !enabled {
-            SnoopyPreferences.weatherEnabled = false
-            finish(returnCode: .OK)
-            return
+    /// Resolve the city (when it changed or no location is saved) and fetch.
+    @discardableResult
+    func updateWeather() async -> Bool {
+        let trimmed = city.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else {
+            weatherError = SnoopyWeatherError.invalidCity.localizedDescription
+            return false
         }
-        let city = cityField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard city.count >= 2 else {
-            statusLabel.stringValue = SnoopyWeatherError.invalidCity.localizedDescription
-            NSSound.beep()
-            return
-        }
-        setBusy(true, status: "Resolving the location and updating the weather…")
-        Task {
-            do {
-                let client = SnoopyWeatherClient()
-                let location = try await client.resolve(city: city)
-                let snapshot = try await client.fetch(location: location)
+        isUpdatingWeather = true
+        weatherError = nil
+        weatherStatus = "Updating…"
+        defer { isUpdatingWeather = false }
+        do {
+            let client = SnoopyWeatherClient()
+            let location: SnoopyWeatherLocation
+            if !cityChanged, let saved = SnoopyPreferences.weatherLocation() {
+                location = saved
+            } else {
+                location = try await client.resolve(city: trimmed)
                 SnoopyPreferences.save(weatherLocation: location)
-                SnoopyPreferences.save(weatherSnapshot: snapshot)
-                SnoopyPreferences.weatherEnabled = true
-                statusLabel.stringValue = "Updated: \(location.name) · \(snapshot.conditions.joined(separator: ", "))"
-                setBusy(false)
-                finish(returnCode: .OK)
-            } catch {
-                setBusy(false, status: error.localizedDescription)
-                NSSound.beep()
+            }
+            let snapshot = try await client.fetch(location: location)
+            SnoopyPreferences.save(weatherSnapshot: snapshot)
+            SnoopyPreferences.weatherEnabled = true
+            city = savedCity
+            refreshStatus()
+            return true
+        } catch {
+            weatherError = error.localizedDescription
+            refreshStatus()
+            return false
+        }
+    }
+
+    func done() {
+        Task { @MainActor in
+            if weatherEnabled, cityChanged {
+                guard await updateWeather() else { return }
+            }
+            onDone?()
+        }
+    }
+}
+
+struct SnoopySettingsView: View {
+    @ObservedObject var model: SnoopySettingsModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("", selection: $model.tab) {
+                ForEach(SnoopySettingsTab.allCases) { tab in
+                    Label(tab.title, systemImage: tab.symbol).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.top, 14)
+            .padding(.horizontal, 90)
+            Group {
+                switch model.tab {
+                case .weather: weatherForm
+                case .playback: playbackForm
+                }
+            }
+            .frame(height: 330)
+            Divider()
+            HStack {
+                Spacer()
+                Button("Done") { model.done() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(model.isUpdatingWeather)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+        }
+        .frame(width: 540)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var weatherForm: some View {
+        Form {
+            Section {
+                Toggle("Match scenes and animations to the local weather", isOn: $model.weatherEnabled)
+                TextField("City", text: $model.city, prompt: Text("London, New York, Tokyo…"))
+                    .disabled(!model.weatherEnabled)
+                    .onSubmit { Task { await model.updateWeather() } }
+                LabeledContent("Status") {
+                    HStack(spacing: 10) {
+                        Text(model.weatherStatus)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.trailing)
+                        if model.isUpdatingWeather {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Button("Update Now") { Task { await model.updateWeather() } }
+                                .disabled(!model.weatherEnabled)
+                        }
+                    }
+                }
+                if let error = model.weatherError {
+                    Text(error).font(.callout).foregroundStyle(.red)
+                }
+            } footer: {
+                Text("Type a city; no location permission is asked for. The weather comes from Open-Meteo (free, no key), is cached for about an hour and re-checked on its own, including after the network was down. It only weights which scenes are chosen; playback never waits for it.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var playbackForm: some View {
+        Form {
+            Section("Speed") {
+                ratePicker("Wallpaper", selection: $model.wallpaperRate)
+                ratePicker("Screen saver", selection: $model.saverRate)
+            }
+            Section {
+                Picker("On battery", selection: $model.onBatteryMode) {
+                    ForEach(SnoopyOnBatteryMode.allCases, id: \.self) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                Toggle("Pause when covered by windows", isOn: $model.pauseWhenHidden)
+                if model.pauseWhenHidden {
+                    LabeledContent("Pause when covered by at least") {
+                        HStack(spacing: 10) {
+                            Slider(value: $model.pauseCoverage, in: 0.3...0.95, step: 0.05)
+                                .frame(width: 160)
+                            Text("\(Int((model.pauseCoverage * 100).rounded())) %")
+                                .monospacedDigit()
+                                .frame(width: 40, alignment: .trailing)
+                        }
+                    }
+                }
+            } header: {
+                Text("Power")
+            } footer: {
+                Text("Coverage is measured once a second on a 50 × 50 grid of each display; only other apps' ordinary windows count. Paused, the wallpaper keeps its current frame on screen.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func ratePicker(_ title: String, selection: Binding<Double>) -> some View {
+        let value = selection.wrappedValue
+        var choices = SnoopyPreferences.playbackRateChoices
+        if !choices.contains(where: { abs($0 - value) < 0.001 }) { choices = (choices + [value]).sorted() }
+        return Picker(title, selection: selection) {
+            ForEach(choices, id: \.self) { rate in
+                Text(SnoopyPreferences.playbackRateTitle(rate)).tag(rate)
             }
         }
     }
+}
 
-    private func setBusy(_ busy: Bool, status: String? = nil) {
-        enabledButton.isEnabled = !busy
-        cityField.isEnabled = !busy && enabledButton.state == .on
-        saveButton.isEnabled = !busy
-        speedPopUp.isEnabled = !busy
-        if let status { statusLabel.stringValue = status }
+/// The settings window: the screen saver's Options sheet, and the window the
+/// Snoopy Wallpaper menu opens. Everything is stored in the shared
+/// `SnoopyPreferences` suite as it changes.
+@MainActor
+public final class SnoopyConfigurationController: NSObject {
+    private let panel: NSPanel
+    private let model = SnoopySettingsModel()
+
+    public override init() {
+        panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 420),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false
+        )
+        super.init()
+        panel.title = "Snoopy Settings"
+        panel.isReleasedWhenClosed = false
+        panel.hidesOnDeactivate = false
+        let hosting = NSHostingView(rootView: SnoopySettingsView(model: model))
+        hosting.frame = NSRect(origin: .zero, size: hosting.fittingSize)
+        panel.contentView = hosting
+        panel.setContentSize(hosting.fittingSize)
+        model.onDone = { [weak self] in self?.finish() }
     }
 
-    private func finish(returnCode: NSApplication.ModalResponse) {
+    /// The window, with every control reloaded from the preferences.
+    public var window: NSWindow {
+        model.reload()
+        return panel
+    }
+
+    /// Open the window on `tab` (the wallpaper app's entry point).
+    public func show(tab: SnoopySettingsTab) {
+        model.reload()
+        model.tab = tab
+        if !panel.isVisible { panel.center() }
+        panel.makeKeyAndOrderFront(nil)
+    }
+
+    private func finish() {
         if let parent = panel.sheetParent {
-            parent.endSheet(panel, returnCode: returnCode)
+            parent.endSheet(panel, returnCode: .OK)
         } else {
             panel.orderOut(nil)
         }

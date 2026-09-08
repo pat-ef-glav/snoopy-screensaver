@@ -41,6 +41,9 @@ final class WallpaperController: NSObject {
                            name: OcclusionMonitor.didChangeNotification, object: nil)
         center.addObserver(self, selector: #selector(screensDidChange(_:)),
                            name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        // The settings window writes power and speed preferences directly.
+        center.addObserver(self, selector: #selector(defaultsDidChange(_:)),
+                           name: UserDefaults.didChangeNotification, object: nil)
 
         let workspace = NSWorkspace.shared.notificationCenter
         workspace.addObserver(self, selector: #selector(screensDidSleep(_:)),
@@ -123,16 +126,6 @@ final class WallpaperController: NSObject {
         }
     }
 
-    func setOnBatteryMode(_ mode: SnoopyOnBatteryMode) {
-        SnoopyPreferences.onBatteryMode = mode
-        applyPolicy()
-    }
-
-    func setPauseWhenHidden(_ pause: Bool) {
-        SnoopyPreferences.pauseWhenHidden = pause
-        applyPolicy()
-    }
-
     // MARK: - Policy
 
     /// A reason that pauses every display, or nil.
@@ -209,6 +202,11 @@ final class WallpaperController: NSObject {
     // MARK: - Notifications
 
     @objc private func powerDidChange(_ note: Notification) { applyPolicy() }
+    @objc private func defaultsDidChange(_ note: Notification) {
+        let rate = SnoopyPreferences.playbackRate(for: .wallpaper)
+        for window in windows.values where window.scene.playbackRate != rate { window.applyPlaybackRate() }
+        applyPolicy()
+    }
     @objc private func occlusionDidChange(_ note: Notification) { applyPolicy() }
     @objc private func screensDidChange(_ note: Notification) { rebuildWindows() }
     @objc private func screensDidSleep(_ note: Notification) { screensAsleep = true; applyPolicy() }
