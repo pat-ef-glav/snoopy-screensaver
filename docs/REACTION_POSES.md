@@ -206,11 +206,22 @@ stays out of git) and indexed as bundle `idlechara_defaultV2_v1`. New record key
   consumed or older than 30 s) and `availableReactionTriggers` (the fireable triggers the loaded
   index can answer, without `generic`; empty on a V1-only index).
 
-The wallpaper app does not expose triggers in its panel (they were tried and removed: a trigger
-acts only at the next character boundary of an idle scene and expires after 30 s, which makes a
-button feel broken). Hosts can still call `triggerReaction(_:)`, and the environment variables
-above exercise every path; `SNOOPY_REACTION_INTERVAL_SECONDS` is the way to see the clips in
-normal playback.
+The wallpaper app watches real events for them (`Sources/SnoopyWallpaper/ReactionSources.swift`,
+switchable in Settings › Reactions):
+
+| Trigger | Source on the Mac | Permission |
+|---|---|---|
+| `music` | another process has been outputting audio for 8 s (CoreAudio process objects; re-arms after 90 s of silence) | none |
+| `presence` | the screen was unlocked, or the Mac woke from sleep | none |
+| `environment` | a new weather snapshot has different conditions (dawn and dusk included, since `sunny` is only reported by day) | none |
+| `alarm` | a timed calendar event starts (checked every 30 s) | Calendars (full access) |
+| `doorbell` | a complete new file appeared in ~/Downloads | Files & Folders › Downloads |
+
+Each source fires its trigger at most once every three minutes; a host-reported trigger stays
+fresh for 90 s (a simulated one 30 s, tvOS's default), long enough to survive a whole character
+item, and a paused wallpaper keeps it fresh until it resumes. The panel shows no buttons for
+them: a button felt broken because a reaction only plays at the next character boundary of an
+idle scene.
 
 ## 6. Verification (2026-09-07)
 

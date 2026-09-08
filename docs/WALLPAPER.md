@@ -34,12 +34,10 @@ window style, like Klack or Little Snitch) that stays open while you use it:
 
 | Area | What it does |
 |---|---|
-| Header | "Snoopy", the status line (Playing on 2 displays / Paused: on battery / Off) and the master switch. Off hides the windows; the system wallpaper shows, and the preview shows a placeholder with no room caption. |
+| Header | "Snoopy", the status line (Playing on 2 displays / Paused: covered by windows / Off), a settings button (gear) and the master switch. Off hides the windows; the system wallpaper shows, and the preview shows a placeholder with no room caption. |
 | Scene | A live frame of the wallpaper on the main display, re-rendered every 2 s while the panel is open — the panel's window reports whether it is on screen, and nothing is rendered while it is closed (the engine composites its layer tree off the main thread and never touches playback; until the first frame arrives the room's first background frame stands in). The capsule names the room ("Scene 33 · bundle 104") or the full-screen video ("Video AS014"). Below it, from the engine's playback status: **Now** — the asset of the composite that is playing ("Pose AP007", "Resting BP002", "Moment CM001", "Bridge BP001→BP002", "Enter RPH" / "Exit RPH", "Reaction RPD001", "Hold RPH", "Video AS002", "Transition ClockWipe hide") with the wall-clock seconds until it ends — and **Then**, the next asset inside the same composite ("—" when the next one has not been drawn yet). The status names an incoming composite as soon as the engine has built it, so for its preroll (normally well under a second) the line can run ahead of the picture. Then **Previous** / **Next Scene** (the next character segment is drawn in another room, swapped in like any segment change) and **Restart**. |
 | Speed | Two pop-ups, Wallpaper and Screen Saver: 0.5× … 2× (a stored speed outside that list, e.g. 1.75× from an older build, appears as an extra item so the pop-up always names the speed that is playing). Video players run at that rate and the HEIC frame clock is scaled; scene budgets and visitor schedules stay in wall time, as on tvOS. |
-| On Battery | *Keep playing*, *Pause*, or *Pause when battery is low* (< 20 %); hidden on desktops. |
-| Pause When Covered by Windows | Polls window coverage once a second (Aerial's algorithm: 50×50 grid, threshold 60 %) and pauses that display while it is mostly covered. |
-| Weather | The cached snapshot (place · conditions · time), a refresh button that fetches now on every display (ignoring the snapshot's refresh gate and failure backoff; disabled while weather linking is off) and the Options sheet (city / weather linking and the screen saver's speed). |
+| Weather | "Toronto · Clear · checked 3 min ago" — the city, the conditions and when the app last fetched (not the service's quarter-hour observation time). Clicking the row opens the Weather tab of settings; the button on the right fetches now on every display (ignoring the snapshot's refresh gate and failure backoff; disabled while weather linking is off). |
 | Footer | Launch at Login, Quit. |
 
 The wallpaper also pauses while the displays sleep and while the system screen
@@ -81,6 +79,17 @@ log stream --style compact --predicate 'process == "SnoopyWallpaper"' | grep -E 
 "derived proxies=0" or "proxy missing … falling back to HEIC" means the bundle has no
 proxies; a non-zero "decodeMisses" at the end of a composite is a live-decode stall.
 
+## Settings
+
+The gear in the panel (and the screen saver's Options button in System Settings) opens the same
+window, a grouped form with three tabs. Everything applies as it changes; **Done** closes it.
+
+| Tab | Contents |
+|---|---|
+| Weather | The weather-linking switch, the city (resolved through Open-Meteo's geocoder; no location permission), the current snapshot ("Toronto · Clear · checked 3 min ago") and **Update Now**. The weather is re-checked on its own at media boundaries, five minutes after a failed fetch, and as soon as the network returns. |
+| Playback | Wallpaper and screen saver speeds (0.5× … 2×); **On battery** (*Keep playing*, *Pause*, *Pause when battery is low*); **Pause when covered by windows** with a slider for how much of a display must be covered (30 … 95 %, default 60 %; coverage is measured once a second on a 50 × 50 grid, only other apps' ordinary windows count). |
+| Reactions | The real-world events Snoopy reacts to (see docs/REACTION_POSES.md): **Music** (another app has been playing audio for 8 s), **Presence** (screen unlocked or the Mac woke), **Environment** (the weather changed, dawn and dusk included) are on by default and need no permission; **Alarm** (a calendar event starts; asks for calendar access) and **Doorbell** (a download finished; asks for access to Downloads) are off until enabled. A reaction plays at Snoopy's next pause in a scene, within about 90 s of the event, each kind at most once every three minutes. |
+
 ## Settings storage
 
 Everything lives in the shared suite `com.dingdangnao.snoopy.shared`
@@ -92,6 +101,8 @@ Everything lives in the shared suite `com.dingdangnao.snoopy.shared`
 | `SnoopyPlaybackRate.wallpaper` / `SnoopyPlaybackRate.screenSaver` | 0.25 … 4, default 1 (the legacy `SnoopyPlaybackRate` is the fallback for both) |
 | `SnoopyOnBatteryMode` | 0 keep playing · 1 pause · 2 pause when low |
 | `SnoopyPauseWhenHidden` | bool, default true |
+| `SnoopyPauseCoverageThreshold` | 0.3 … 0.95, default 0.6 — the covered fraction that pauses a display |
+| `SnoopyReactionSource.<trigger>` | bool per reaction source (`music`, `presence`, `environment` default true; `alarm`, `doorbell` default false) |
 | `SnoopyWallpaperLevelOffset` | int, default 0 — offset from `CGWindowLevelForKey(.desktopWindow)`; try `-1` (Aerial's choice) if the wallpaper ever appears above your desktop icons |
 
 ## Window recipe

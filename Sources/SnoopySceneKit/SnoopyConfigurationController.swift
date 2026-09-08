@@ -7,6 +7,7 @@ import SnoopyTVCore // Swift package build; the Xcode target compiles the core s
 public enum SnoopySettingsTab: String, CaseIterable, Identifiable, Sendable {
     case weather
     case playback
+    case reactions
 
     public var id: String { rawValue }
 
@@ -14,6 +15,7 @@ public enum SnoopySettingsTab: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .weather: return "Weather"
         case .playback: return "Playback"
+        case .reactions: return "Reactions"
         }
     }
 
@@ -21,8 +23,30 @@ public enum SnoopySettingsTab: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .weather: return "cloud.sun"
         case .playback: return "play.rectangle"
+        case .reactions: return "bell"
         }
     }
+}
+
+/// One real-world source behind a reaction trigger, as shown in settings.
+struct SnoopyReactionSourceInfo: Identifiable {
+    let trigger: String
+    let title: String
+    let detail: String
+    var id: String { trigger }
+
+    static let all: [SnoopyReactionSourceInfo] = [
+        .init(trigger: ReactionTrigger.music, title: "Music",
+              detail: "When another app has been playing audio for a few seconds."),
+        .init(trigger: ReactionTrigger.presence, title: "Presence",
+              detail: "When you unlock the Mac or it wakes from sleep."),
+        .init(trigger: ReactionTrigger.environment, title: "Environment",
+              detail: "When the weather changes, including sunrise and sunset."),
+        .init(trigger: ReactionTrigger.alarm, title: "Alarm",
+              detail: "When a calendar event starts. Asks for calendar access."),
+        .init(trigger: ReactionTrigger.doorbell, title: "Doorbell",
+              detail: "When a download finishes. Asks for access to your Downloads folder."),
+    ]
 }
 
 /// State behind the settings window. Every control writes to
@@ -59,8 +83,20 @@ final class SnoopySettingsModel: ObservableObject {
         didSet { if !loading { SnoopyPreferences.pauseCoverageThreshold = pauseCoverage } }
     }
 
+    @Published var reactionSources: [String: Bool] = [:]
+
     var onDone: (() -> Void)?
     private var loading = false
+
+    func reactionSourceBinding(_ trigger: String) -> Binding<Bool> {
+        Binding(
+            get: { self.reactionSources[trigger] ?? SnoopyPreferences.reactionSourceEnabled(trigger) },
+            set: { enabled in
+                self.reactionSources[trigger] = enabled
+                SnoopyPreferences.setReactionSourceEnabled(enabled, for: trigger)
+            }
+        )
+    }
 
     private var savedCity: String {
         SnoopyPreferences.defaults.string(forKey: SnoopyPreferences.cityNameKey)?
@@ -82,6 +118,9 @@ final class SnoopySettingsModel: ObservableObject {
         onBatteryMode = SnoopyPreferences.onBatteryMode
         pauseWhenHidden = SnoopyPreferences.pauseWhenHidden
         pauseCoverage = SnoopyPreferences.pauseCoverageThreshold
+        reactionSources = Dictionary(uniqueKeysWithValues: SnoopyReactionSourceInfo.all.map {
+            ($0.trigger, SnoopyPreferences.reactionSourceEnabled($0.trigger))
+        })
         refreshStatus()
     }
 
@@ -152,11 +191,12 @@ struct SnoopySettingsView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .padding(.top, 14)
-            .padding(.horizontal, 90)
+            .padding(.horizontal, 60)
             Group {
                 switch model.tab {
                 case .weather: weatherForm
                 case .playback: playbackForm
+                case .reactions: reactionsForm
                 }
             }
             .frame(height: 330)
@@ -233,6 +273,26 @@ struct SnoopySettingsView: View {
                 Text("Power")
             } footer: {
                 Text("Coverage is measured once a second on a 50 × 50 grid of each display; only other apps' ordinary windows count. Paused, the wallpaper keeps its current frame on screen.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var reactionsForm: some View {
+        Form {
+            Section {
+                ForEach(SnoopyReactionSourceInfo.all) { source in
+                    Toggle(isOn: model.reactionSourceBinding(source.trigger)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(source.title)
+                            Text(source.detail).font(.callout).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } header: {
+                Text("Snoopy reacts to")
+            } footer: {
+                Text("A reaction plays at Snoopy's next pause in a scene, within about a minute and a half of the event, and each kind at most once every three minutes. When Woodstock is with him, the two react together. These are the Apple TV reactions: a doorbell, an alarm, music, the environment and someone arriving.")
             }
         }
         .formStyle(.grouped)

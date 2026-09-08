@@ -173,11 +173,16 @@ public final class SnoopySceneView: NSView {
         var firedAt: TimeInterval
         /// "host" | "env" | "interval" (log only).
         let source: String
+        /// How long the event stays fresh. tvOS's defaultReactionTriggerTimeout
+        /// for simulated triggers; a real event reported by the host waits
+        /// through a whole character item.
+        let timeout: TimeInterval
     }
     private var pendingReactionTrigger: ReactionTriggerEvent?
     private var lastHandledReactionTrigger: ReactionTriggerEvent?
     /// tvOS `defaultReactionTriggerTimeout`.
     private static let reactionTriggerTimeout: TimeInterval = 30
+    private static let hostReactionTriggerTimeout: TimeInterval = 90
     /// `SNOOPY_REACTION_TRIGGER`: fired once, at the first character boundary
     /// of an idle scene after one animation has played there.
     private var startupReactionTrigger: String?
@@ -3222,11 +3227,12 @@ public final class SnoopySceneView: NSView {
         let known = ReactionTrigger.all.contains(trigger)
         // Newest wins, like tvOS "Updated reactionTriggerEvent". Unknown
         // tokens are kept: they can still be answered by a generic hold.
+        let timeout = source == "host" ? Self.hostReactionTriggerTimeout : Self.reactionTriggerTimeout
         pendingReactionTrigger = ReactionTriggerEvent(
-            trigger: trigger, firedAt: ProcessInfo.processInfo.systemUptime, source: source
+            trigger: trigger, firedAt: ProcessInfo.processInfo.systemUptime, source: source, timeout: timeout
         )
         NSLog("SnoopyTVScreenSaver: reaction trigger=%@ source=%@ known=%d pending until +%.0fs",
-              trigger, source, known ? 1 : 0, Self.reactionTriggerTimeout)
+              trigger, source, known ? 1 : 0, timeout)
     }
 
     /// The pending trigger if it is still fresh and was not handled; expired
@@ -3234,7 +3240,7 @@ public final class SnoopySceneView: NSView {
     private func consumeFreshReactionTrigger() -> ReactionTriggerEvent? {
         guard let event = pendingReactionTrigger else { return nil }
         let age = ProcessInfo.processInfo.systemUptime - event.firedAt
-        if age > Self.reactionTriggerTimeout {
+        if age > event.timeout {
             pendingReactionTrigger = nil
             NSLog("SnoopyTVScreenSaver: reaction trigger=%@ expired after %.1fs", event.trigger, age)
             return nil

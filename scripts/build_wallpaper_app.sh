@@ -93,6 +93,10 @@ cat > "$OUT/Contents/Info.plist" <<PLIST
 	<string>NSApplication</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Snoopy reacts when a calendar event starts (Settings › Reactions › Alarm).</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Snoopy reacts when a calendar event starts (Settings › Reactions › Alarm).</string>
 </dict>
 </plist>
 PLIST

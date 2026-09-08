@@ -11,6 +11,7 @@ final class WallpaperController: NSObject {
     private var windows: [CGDirectDisplayID: DesktopWindow] = [:]
     private var occlusionMonitors: [CGDirectDisplayID: OcclusionMonitor] = [:]
     private let power = PowerMonitor()
+    private lazy var reactions = ReactionSourceCoordinator { [weak self] trigger in self?.react(trigger) }
     private var screensAsleep = false
     private var screensaverActive = false
     private var didStart = false
@@ -59,9 +60,11 @@ final class WallpaperController: NSObject {
                                 name: Notification.Name("com.apple.screensaver.didstop"), object: nil)
 
         rebuildWindows()
+        reactions.start()
     }
 
     func shutdown() {
+        reactions.stop()
         for window in windows.values { window.hide() }
         for monitor in occlusionMonitors.values { monitor.stop() }
         occlusionMonitors.removeAll()
@@ -98,6 +101,12 @@ final class WallpaperController: NSObject {
 
     func previousScene() {
         for window in windows.values where window.state != .stopped { window.scene.skipToPreviousScene() }
+    }
+
+    /// A real-world event: every playing or paused display's scene queues the
+    /// reaction (a paused scene keeps it fresh until it resumes).
+    func react(_ trigger: String) {
+        for window in windows.values where window.state != .stopped { window.scene.triggerReaction(trigger) }
     }
 
     /// Fetch the weather now on every display's scene (the panel's refresh
@@ -206,6 +215,7 @@ final class WallpaperController: NSObject {
         let rate = SnoopyPreferences.playbackRate(for: .wallpaper)
         for window in windows.values where window.scene.playbackRate != rate { window.applyPlaybackRate() }
         applyPolicy()
+        reactions.reconfigure()
     }
     @objc private func occlusionDidChange(_ note: Notification) { applyPolicy() }
     @objc private func screensDidChange(_ note: Notification) { rebuildWindows() }

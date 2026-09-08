@@ -144,6 +144,24 @@ public enum SnoopyPreferences {
         set { defaults.set(min(max(newValue, 0.3), 0.95), forKey: pauseCoverageThresholdKey) }
     }
 
+    /// The real-world event sources behind the reaction poses (the wallpaper
+    /// app watches them; see Sources/SnoopyWallpaper/ReactionSources.swift).
+    /// Sources that need no permission are on by default; the ones that ask
+    /// for calendar or Downloads access are off until enabled.
+    public static func reactionSourceKey(_ trigger: String) -> String { "SnoopyReactionSource." + trigger }
+
+    public static func reactionSourceEnabled(_ trigger: String) -> Bool {
+        let key = reactionSourceKey(trigger)
+        if defaults.object(forKey: key) == nil {
+            return [ReactionTrigger.music, ReactionTrigger.presence, ReactionTrigger.environment].contains(trigger)
+        }
+        return defaults.bool(forKey: key)
+    }
+
+    public static func setReactionSourceEnabled(_ enabled: Bool, for trigger: String) {
+        defaults.set(enabled, forKey: reactionSourceKey(trigger))
+    }
+
     /// Whether the desktop wallpaper is shown (the menu-bar app's main toggle).
     public static var wallpaperEnabled: Bool {
         get { defaults.object(forKey: wallpaperEnabledKey) == nil ? true : defaults.bool(forKey: wallpaperEnabledKey) }
