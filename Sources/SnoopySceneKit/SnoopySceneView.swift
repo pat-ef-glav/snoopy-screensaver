@@ -1,5 +1,6 @@
 import AVFoundation
 import Cocoa
+import CoreImage
 import CoreVideo
 import ImageIO
 import Network
@@ -1265,6 +1266,11 @@ public final class SnoopySceneView: NSView {
         guard FileManager.default.fileExists(atPath: url.path) else { return false }
 
         let item = AVPlayerItem(url: url)
+        // The panel preview reads this player's own decoded frames; generating
+        // a frame from the file while the player decodes it is unreliable.
+        item.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+        ]))
         let player = AVPlayer(playerItem: item)
         player.defaultRate = Float(playbackRate)
         player.actionAtItemEnd = .pause
@@ -4131,6 +4137,8 @@ public final class SnoopySceneView: NSView {
         case color(CGColor)
         case image(CGImage)
         case videoFrame(asset: AVAsset, time: CMTime)
+        /// A frame taken from the player's own output (the active movie).
+        case pixelBuffer(CVPixelBuffer)
     }
 
     /// One thing to draw, captured on the main thread from the layer tree.
@@ -4239,14 +4247,25 @@ public final class SnoopySceneView: NSView {
         }
         if let playerLayer = layer as? AVPlayerLayer {
             if playerLayer.isReadyForDisplay, let player = playerLayer.player,
-               let asset = player.currentItem?.asset {
-                // A seamless item plays a mutable composition; the generator
-                // reads an immutable snapshot of it.
-                let snapshot = (asset as? AVMutableComposition).flatMap { $0.copy() as? AVAsset } ?? asset
-                drawables.append(PreviewDrawable(
-                    source: .videoFrame(asset: snapshot, time: player.currentTime()), frame: frame,
-                    clip: clip, opacity: opacity, gravity: Self.previewGravity(playerLayer.videoGravity)
-                ))
+               let item = player.currentItem {
+                let time = player.currentTime()
+                let gravity = Self.previewGravity(playerLayer.videoGravity)
+                if let output = item.outputs.lazy.compactMap({ $0 as? AVPlayerItemVideoOutput }).first,
+                   let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil) {
+                    // The frame the player is showing, no second decode.
+                    drawables.append(PreviewDrawable(
+                        source: .pixelBuffer(buffer), frame: frame, clip: clip, opacity: opacity, gravity: gravity
+                    ))
+                } else {
+                    // A seamless item plays a mutable composition; the generator
+                    // reads an immutable snapshot of it.
+                    let asset = item.asset
+                    let snapshot = (asset as? AVMutableComposition).flatMap { $0.copy() as? AVAsset } ?? asset
+                    drawables.append(PreviewDrawable(
+                        source: .videoFrame(asset: snapshot, time: time), frame: frame,
+                        clip: clip, opacity: opacity, gravity: gravity
+                    ))
+                }
             }
         } else if let contents = layer.contents, CFGetTypeID(contents as AnyObject) == CGImage.typeID {
             drawables.append(PreviewDrawable(
@@ -4325,6 +4344,10 @@ public final class SnoopySceneView: NSView {
                     if let image = previewVideoFrame(asset: asset, time: time, maxPixelSize: maxPixelSize) {
                         drawPreviewImage(image, in: drawable.frame, gravity: drawable.gravity, context: context)
                     }
+                case .pixelBuffer(let buffer):
+                    if let image = previewImage(from: buffer) {
+                        drawPreviewImage(image, in: drawable.frame, gravity: drawable.gravity, context: context)
+                    }
                 }
             }
         }
@@ -4346,6 +4369,13 @@ public final class SnoopySceneView: NSView {
             rect = SpritePlacementResolver.aspectFillFrame(contentSize: size, in: frame)
         }
         context.draw(image, in: rect)
+    }
+
+    private nonisolated static let previewCIContext = CIContext(options: [.useSoftwareRenderer: false])
+
+    private nonisolated static func previewImage(from buffer: CVPixelBuffer) -> CGImage? {
+        let image = CIImage(cvPixelBuffer: buffer)
+        return previewCIContext.createCGImage(image, from: image.extent)
     }
 
     /// The frame of `asset` at `time` (exact when possible; a paused player
