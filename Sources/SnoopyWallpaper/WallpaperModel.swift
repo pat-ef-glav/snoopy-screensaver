@@ -362,6 +362,10 @@ final class WallpaperModel: ObservableObject {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    func showMediaSetup(onInstalled: @escaping () -> Void) {
+        weatherController.showMediaSetup(folderURL: AssetStore.sharedMediaDirectory, onInstalled: onInstalled)
+    }
+
     func quit() {
         NSApp.terminate(nil)
     }

@@ -72,7 +72,7 @@ cat > "$OUT/Contents/Info.plist" <<PLIST
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.dingdangnao.snoopy.wallpaper</string>
+	<string>${SNOOPY_BUNDLE_ID:-com.pat-ef-glav.snoopy.wallpaper}</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -148,9 +148,18 @@ case "$ASSETS_MODE" in
   *) echo "SNOOPY_ASSETS must be copy, link or none" >&2; exit 2 ;;
 esac
 
-# Local app: seal ad-hoc so Launch at Login (SMAppService) and TCC treat it consistently.
+# Signing. Ad-hoc by default (local dev: Launch at Login and TCC treat it
+# consistently). Set SNOOPY_SIGN_IDENTITY to a "Developer ID Application: …"
+# identity to produce a distributable, notarization-ready bundle (hardened
+# runtime + secure timestamp); notarize and staple it afterwards.
+SIGN_IDENTITY="${SNOOPY_SIGN_IDENTITY:--}"
 if command -v codesign >/dev/null 2>&1; then
-  codesign --force --deep --sign - "$OUT"
+  if [ "$SIGN_IDENTITY" = "-" ]; then
+    codesign --force --deep --sign - "$OUT"
+  else
+    codesign --force --deep --options runtime --timestamp --sign "$SIGN_IDENTITY" "$OUT"
+    codesign --verify --deep --strict "$OUT"
+  fi
 fi
 echo "Built: $OUT"
 

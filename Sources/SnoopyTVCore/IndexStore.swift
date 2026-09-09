@@ -30,11 +30,15 @@ public struct AssetStore: Sendable {
         let bundledAssets = indexURL.deletingLastPathComponent().appendingPathComponent("SnoopyAssets", isDirectory: true)
         if let override = assetsRootOverride {
             self.assetsRoot = override.standardizedFileURL
-        } else if FileManager.default.fileExists(atPath: bundledAssets.path) {
+        } else if Self.isPopulatedDirectory(bundledAssets) {
             // A self-contained .saver keeps the index and all tvOS assets in
             // Contents/Resources. Prefer that portable copy over an absolute
             // source path recorded when the index was generated.
             self.assetsRoot = bundledAssets.standardizedFileURL
+        } else if FileManager.default.fileExists(atPath: Self.sharedMediaDirectory.path) {
+            // A small host (the wallpaper app) ships without media and reads it
+            // from a shared folder the user fills once; see sharedMediaDirectory.
+            self.assetsRoot = Self.sharedMediaDirectory
         } else if let relative = decoded.assetRoot, relative != "." {
             if relative.hasPrefix("/") {
                 self.assetsRoot = URL(fileURLWithPath: relative).standardizedFileURL
@@ -47,6 +51,29 @@ public struct AssetStore: Sendable {
             self.assetsRoot = indexURL.deletingLastPathComponent().appendingPathComponent("assets", isDirectory: true)
         }
         self.index = decoded
+    }
+
+    /// The shared media folder a small host (the wallpaper app) reads its
+    /// clips from when it ships without them: `~/Library/Application Support/
+    /// Snoopy Wallpaper/SnoopyAssets`. A self-contained `.saver` never reaches
+    /// here because its bundled `SnoopyAssets` folder wins first.
+    public static var sharedMediaDirectory: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
+        return base.appendingPathComponent("Snoopy Wallpaper/SnoopyAssets", isDirectory: true).standardizedFileURL
+    }
+
+    /// A directory that exists and holds at least one visible asset bundle.
+    public static func isPopulatedDirectory(_ url: URL) -> Bool {
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: url.path) else { return false }
+        return entries.contains { !$0.hasPrefix(".") }
+    }
+
+    /// Whether the shared media folder looks like it holds the tvOS asset
+    /// bundles (the wallpaper app's first-run check).
+    public static var sharedMediaIsPopulated: Bool {
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: sharedMediaDirectory.path) else { return false }
+        return entries.contains { $0.hasPrefix("idlechara_") }
     }
 
     public func url(for asset: AssetRecord) throws -> URL {

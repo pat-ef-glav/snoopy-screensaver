@@ -28,6 +28,18 @@ public enum SnoopySettingsTab: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// First-run media setup shown by the wallpaper app when its shared clip
+/// folder is empty.
+public struct SnoopyMediaSetup: Equatable {
+    public let folderURL: URL
+    public var checkedEmptyAt: Date?
+
+    public init(folderURL: URL, checkedEmptyAt: Date? = nil) {
+        self.folderURL = folderURL
+        self.checkedEmptyAt = checkedEmptyAt
+    }
+}
+
 /// One real-world source behind a reaction trigger, as shown in settings.
 struct SnoopyReactionSourceInfo: Identifiable {
     let trigger: String
@@ -85,8 +97,28 @@ final class SnoopySettingsModel: ObservableObject {
 
     @Published var reactionSources: [String: Bool] = [:]
 
+    /// First-run: the shared media folder is empty, so the wallpaper app
+    /// shows a setup banner. nil in the self-contained screen saver.
+    @Published var mediaSetup: SnoopyMediaSetup?
+
     var onDone: (() -> Void)?
+    /// Called after the user says the clips are in place and they resolve;
+    /// the host reloads playback.
+    var onMediaInstalled: (() -> Void)?
     private var loading = false
+
+    /// Re-check the shared media folder; when it is now populated, clear the
+    /// banner and tell the host to start playing.
+    func recheckMedia() {
+        guard mediaSetup != nil else { return }
+        if AssetStore.sharedMediaIsPopulated {
+            mediaSetup = nil
+            onMediaInstalled?()
+        } else {
+            mediaSetup?.checkedEmptyAt = Date()
+            objectWillChange.send()
+        }
+    }
 
     func reactionSourceBinding(_ trigger: String) -> Binding<Bool> {
         Binding(
@@ -183,6 +215,10 @@ struct SnoopySettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if let setup = model.mediaSetup {
+                mediaSetupBanner(setup)
+                Divider()
+            }
             Picker("", selection: $model.tab) {
                 ForEach(SnoopySettingsTab.allCases) { tab in
                     Label(tab.title, systemImage: tab.symbol).tag(tab)
@@ -211,6 +247,38 @@ struct SnoopySettingsView: View {
             .padding(.vertical, 12)
         }
         .frame(width: 540)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private func mediaSetupBanner(_ setup: SnoopyMediaSetup) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Add Snoopy's clips to finish setup", systemImage: "arrow.down.circle.fill")
+                .font(.headline)
+            Text("Snoopy has no animation clips yet. Put the SnoopyAssets bundles (the idlechara_… folders) into the folder below, then choose I've Added Them. They stay on your Mac; the app never downloads them.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Image(systemName: "folder")
+                Text(setup.folderURL.path).font(.callout).monospaced().lineLimit(1).truncationMode(.middle)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06)))
+            if setup.checkedEmptyAt != nil {
+                Text("That folder is still empty. Drag the clip folders in, then try again.")
+                    .font(.callout).foregroundStyle(.orange)
+            }
+            HStack {
+                Button("Reveal Folder in Finder") {
+                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: setup.folderURL.path)
+                }
+                Spacer()
+                Button("I've Added Them") { model.recheckMedia() }
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(16)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
@@ -344,8 +412,32 @@ public final class SnoopyConfigurationController: NSObject {
     public func show(tab: SnoopySettingsTab) {
         model.reload()
         model.tab = tab
+        present()
+    }
+
+    /// First run: show the window with the clip-setup banner. `onInstalled`
+    /// fires once the folder is filled and the clips resolve.
+    public func showMediaSetup(folderURL: URL, onInstalled: @escaping () -> Void) {
+        model.reload()
+        model.mediaSetup = SnoopyMediaSetup(folderURL: folderURL)
+        model.onMediaInstalled = { [weak self] in
+            onInstalled()
+            self?.finish()
+        }
+        present()
+    }
+
+    /// The window without ordering it front, for the offscreen screenshot hook.
+    public var settingsWindowForCapture: NSWindow {
+        panel.setContentSize(panel.contentView?.fittingSize ?? panel.frame.size)
+        return panel
+    }
+
+    private func present() {
+        panel.setContentSize(panel.contentView?.fittingSize ?? panel.frame.size)
         if !panel.isVisible { panel.center() }
         panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func finish() {

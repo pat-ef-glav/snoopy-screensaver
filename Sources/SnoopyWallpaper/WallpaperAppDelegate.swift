@@ -16,6 +16,16 @@ final class WallpaperAppDelegate: NSObject, NSApplicationDelegate {
         controller.start()
         model.refresh()
         installScreenshotHook()
+        presentMediaSetupIfNeeded()
+    }
+
+    /// First run: with no clips in the shared folder the app can play nothing,
+    /// so create the folder and open settings with instructions to fill it.
+    private func presentMediaSetupIfNeeded() {
+        guard !AssetStore.sharedMediaIsPopulated else { return }
+        let folder = AssetStore.sharedMediaDirectory
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        model.showMediaSetup { [weak self] in self?.controller.restart() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -85,6 +95,23 @@ final class WallpaperAppDelegate: NSObject, NSApplicationDelegate {
                 }
                 window.orderOut(nil)
             }
+            // The first-run media-setup banner, against a throwaway empty folder.
+            let setupController = SnoopyConfigurationController()
+            let tempFolder = FileManager.default.temporaryDirectory
+                .appendingPathComponent("Snoopy Wallpaper/SnoopyAssets", isDirectory: true)
+            setupController.showMediaSetup(folderURL: tempFolder) {}
+            let setupWindow = setupController.settingsWindowForCapture
+            setupWindow.alphaValue = 0.01
+            setupWindow.level = .floating
+            setupWindow.orderFrontRegardless()
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            if let view = setupWindow.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: rep)
+                let image = NSImage(size: view.bounds.size)
+                image.addRepresentation(rep)
+                Self.writePNG(image, to: directory.appendingPathComponent("settings-mediasetup.png"))
+            }
+            setupWindow.orderOut(nil)
             NSLog("SnoopyWallpaper: settings screenshots written to %@", directory.path)
         }
     }

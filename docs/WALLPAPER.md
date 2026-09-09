@@ -128,6 +128,39 @@ cp -Rc ~/Documents/…/SnoopyAssets ~/Library/Application\ Support/Snoopy\ Wallp
 ln -sfn ~/Library/Application\ Support/Snoopy\ Wallpaper/SnoopyAssets Resources/SnoopyAssets
 ```
 
+## Signing and sharing the app
+
+The app is a small (~30 MB) bundle that reads its clips from
+`~/Library/Application Support/Snoopy Wallpaper/SnoopyAssets`, so it can be signed and notarized
+without embedding Apple's 7 GB media. Build a Developer-ID-signed, hardened-runtime bundle by
+passing your identity:
+
+```sh
+SNOOPY_ASSETS=none SNOOPY_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+  SNOOPY_APP_OUTPUT="$PWD/.build/SnoopyWallpaper.app" sh scripts/build_wallpaper_app.sh
+```
+
+No new Apple ID, App ID or app-specific setup is needed beyond what you already use: the
+Developer ID certificate is per-team and signs every app, an app-specific password is per Apple
+ID (reuse the one you notarize other software with), and a Developer-ID bundle identifier is not
+registered with Apple — it just has to be your own reverse-DNS string (the default is
+`com.pat-ef-glav.snoopy.wallpaper`, override with `SNOOPY_BUNDLE_ID`). Then notarize and staple:
+
+```sh
+ditto -c -k --keepParent .build/SnoopyWallpaper.app /tmp/SnoopyWallpaper.zip
+xcrun notarytool submit /tmp/SnoopyWallpaper.zip --keychain-profile "<profile>" --wait
+xcrun stapler staple .build/SnoopyWallpaper.app
+```
+
+(First time only, store the credentials once:
+`xcrun notarytool store-credentials "<profile>" --apple-id <id> --team-id <TEAMID> --password <app-specific-password>`.)
+
+A friend then drops the `SnoopyAssets` bundles into their own
+`~/Library/Application Support/Snoopy Wallpaper/SnoopyAssets`; on first launch, with that folder
+empty, the app creates it and opens Settings with a banner walking them through it. The screen
+saver is separate and self-contained — it bundles its own clips, so it is signed and shared as
+one `.saver` (see `scripts/build_and_install.sh`), not through this folder.
+
 ## First run and troubleshooting
 
 1. `sh scripts/build_wallpaper_app.sh` then `open .build/SnoopyWallpaper.app` — a dog icon
