@@ -24,6 +24,9 @@ fi
 
 # macOS 26 runs legacyScreenSaver as ARM64E; its module loader performs an
 # exact subtype check rather than accepting a generic arm64 slice.
+# Build unsigned; the bundle is signed afterwards by sign_saver (ad-hoc for a
+# local install, Developer ID for distribution). This overrides the stale
+# CODE_SIGN_IDENTITY / DEVELOPMENT_TEAM baked into the project.
 xcodebuild \
   -project "$PROJECT" \
   -scheme SnoopyTVScreenSaver \
@@ -32,6 +35,8 @@ xcodebuild \
   -destination 'generic/platform=macOS' \
   ARCHS='arm64e x86_64' \
   ONLY_ACTIVE_ARCH=NO \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_STYLE=Manual \
+  DEVELOPMENT_TEAM="" PROVISIONING_PROFILE_SPECIFIER="" OTHER_CODE_SIGN_FLAGS="" \
   build
 
 PRODUCT="$DERIVED/Build/Products/Release/SNOOPY.saver"
@@ -39,6 +44,32 @@ if [ ! -d "$PRODUCT" ]; then
   echo "Build finished but the product was not found: $PRODUCT" >&2
   find "$DERIVED/Build/Products" -maxdepth 3 -name '*.saver' -print >&2 || true
   exit 3
+fi
+
+# Signing identity: ad-hoc by default (local install). Set SNOOPY_SIGN_IDENTITY
+# to a "Developer ID Application: …" identity for a distributable, notarizable
+# bundle (hardened runtime + secure timestamp).
+SIGN_IDENTITY="${SNOOPY_SIGN_IDENTITY:--}"
+sign_saver() {
+  target="$1"
+  if [ "$SIGN_IDENTITY" = "-" ]; then
+    codesign --force --deep --sign - "$target"
+  else
+    codesign --force --deep --options runtime --timestamp --sign "$SIGN_IDENTITY" "$target"
+  fi
+  codesign --verify --deep --strict "$target"
+}
+
+# Distribution build: sign to a standalone bundle and stop, without touching the
+# installed saver. Notarize and staple it afterwards (see docs/WALLPAPER.md).
+if [ "${SNOOPY_NO_INSTALL:-0}" = "1" ]; then
+  DIST="${SNOOPY_SAVER_OUTPUT:-$ROOT/.build/SNOOPY.saver}"
+  rm -rf "$DIST"
+  mkdir -p "$(dirname "$DIST")"
+  ditto "$PRODUCT" "$DIST"
+  sign_saver "$DIST"
+  echo "Built (not installed): $DIST"
+  exit 0
 fi
 
 mkdir -p "$DEST"
@@ -57,9 +88,8 @@ touch "$DEST/SNOOPY.saver"
 # A development identity can verify structurally yet be rejected by AMFI when
 # legacyScreenSaver loads the copied bundle (for example while its certificate
 # trust state is unavailable). This is a local plug-in, so seal the final copy
-# ad-hoc after every resource mutation and verify exactly what will be loaded.
-codesign --force --deep --sign - "$DEST/SNOOPY.saver"
-codesign --verify --deep --strict "$DEST/SNOOPY.saver"
+# after every resource mutation and verify exactly what will be loaded.
+sign_saver "$DEST/SNOOPY.saver"
 test -f "$DEST/SNOOPY.saver/Contents/Resources/Assets.car"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
   -f "$DEST/SNOOPY.saver" 2>/dev/null || true
