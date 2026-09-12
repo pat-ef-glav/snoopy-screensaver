@@ -237,7 +237,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -eu\nSOURCE=\"$SRCROOT/.derived-media\"\nDEST=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/DerivedMedia\"\n\n";
+			shellScript = "set -eu\nSOURCE=\"$SRCROOT/.derived-media\"\nDEST=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/DerivedMedia\"\nif [ -d \"$SOURCE\" ]; then\n  rm -rf \"$DEST\"\n  ditto \"$SOURCE\" \"$DEST\"\nelse\n  echo \"warning: $SOURCE missing; the screensaver will decode HEIC frames live\" >&2\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
