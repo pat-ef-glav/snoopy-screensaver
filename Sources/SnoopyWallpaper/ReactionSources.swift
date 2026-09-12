@@ -8,7 +8,7 @@ import SnoopyTVCore
 ///
 /// | Trigger       | Source on the Mac                                        | Permission |
 /// |---------------|----------------------------------------------------------|------------|
-/// | `music`       | another process has been outputting audio for 8 s        | none       |
+/// | `music`       | another app starts an audio stream and plays it 8 s      | none       |
 /// | `presence`    | the screen was unlocked, or the Mac woke from sleep      | none       |
 /// | `environment` | the weather conditions changed (dawn and dusk included)  | none       |
 /// | `alarm`       | a calendar event starts                                  | Calendars  |
@@ -87,18 +87,36 @@ protocol ReactionSource: AnyObject {
     func stop()
 }
 
-// MARK: - music: another process is outputting audio
+// MARK: - music: another app starts playing audio
 
-/// Polls CoreAudio's process objects every two seconds: `music` fires once
-/// another process has been running audio output for eight seconds, and
-/// re-arms after ninety seconds of silence. This app's own players never
-/// count (the scene videos carry no audio anyway).
+/// Polls CoreAudio's process objects every two seconds. It fires only on a
+/// rising edge: an output pipeline that was NOT running when we started (or
+/// when the audio device last changed) starts and keeps running for eight
+/// seconds. Pipelines already warm at that point are ignored, so an app like
+/// Klack that holds a silent output open for instant key clicks, a paused
+/// media app, or output re-established when headphones are plugged in do not
+/// count as music. Our own process is excluded (the scene videos are silent).
 final class AudioOutputSource: ReactionSource {
     private let onEvent: (String) -> Void
     private var timer: DispatchSourceTimer?
-    private var runningSince: TimeInterval?
-    private var quietSince: TimeInterval?
+
+    /// Output pipelines that were already warm when we started, or when the
+    /// audio device last changed. These are ignored: an app like Klack keeps a
+    /// silent output stream open so its key clicks play instantly, and that is
+    /// not music. Only a pipeline that newly starts and stays counts.
+    private var baseline: Set<pid_t> = []
+    private var baselineEstablished = false
+    private var candidateSince: [pid_t: TimeInterval] = [:]
     private var announced = false
+
+    /// Plugging in headphones (or any output-device change) makes apps
+    /// re-establish output on the new device, which looks like a fresh start.
+    /// Ignore new pipelines for a few seconds around such a change.
+    private var suppressUntil: TimeInterval = 0
+    private var lastDefaultDevice = AudioObjectID(kAudioObjectUnknown)
+    private var lastDeviceCount = -1
+    private static let startThreshold: TimeInterval = 8
+    private static let deviceChangeSuppression: TimeInterval = 6
 
     init(onEvent: @escaping (String) -> Void) { self.onEvent = onEvent }
 
@@ -114,74 +132,114 @@ final class AudioOutputSource: ReactionSource {
     func stop() {
         timer?.cancel()
         timer = nil
+        baseline = []
+        baselineEstablished = false
+        candidateSince = [:]
+        announced = false
     }
 
     private func poll() {
         let now = ProcessInfo.processInfo.systemUptime
-        if Self.anotherProcessIsOutputtingAudio() {
-            quietSince = nil
-            if runningSince == nil { runningSince = now }
-            if !announced, let since = runningSince, now - since >= 8 {
-                announced = true
-                onEvent("audio has been playing for 8 s")
-            }
-        } else {
-            runningSince = nil
-            if quietSince == nil { quietSince = now }
-            if announced, let since = quietSince, now - since >= 90 { announced = false }
+
+        // A device change re-baselines and opens a short suppression window.
+        let (device, deviceCount) = Self.currentOutputDeviceAndCount()
+        if baselineEstablished, device != lastDefaultDevice || deviceCount != lastDeviceCount {
+            suppressUntil = now + Self.deviceChangeSuppression
+            baseline.formUnion(Self.outputtingPIDs())
+        }
+        lastDefaultDevice = device
+        lastDeviceCount = deviceCount
+
+        let current = Self.outputtingPIDs()
+
+        // The first poll only records what is already warm; it never fires.
+        guard baselineEstablished else {
+            baseline = current
+            baselineEstablished = true
+            return
+        }
+
+        // An app that stops outputting leaves the baseline, so if it starts
+        // again later that is a genuine new start.
+        baseline.formIntersection(current)
+
+        let candidates = current.subtracting(baseline)
+        candidateSince = candidateSince.filter { candidates.contains($0.key) }
+        for pid in candidates where candidateSince[pid] == nil { candidateSince[pid] = now }
+
+        if candidates.isEmpty { announced = false }
+        guard now >= suppressUntil else { return }
+
+        if !announced,
+           let pid = candidates.first(where: { now - (candidateSince[$0] ?? now) >= Self.startThreshold }) {
+            announced = true
+            onEvent("audio started in \(Self.processName(pid)) and played for \(Int(Self.startThreshold)) s")
         }
     }
 
-    private static func anotherProcessIsOutputtingAudio() -> Bool {
+    /// PIDs of other processes with a running output pipeline right now.
+    private static func outputtingPIDs() -> Set<pid_t> {
         let own = pid_t(ProcessInfo.processInfo.processIdentifier)
-        if #available(macOS 14.2, *) {
-            var address = AudioObjectPropertyAddress(
-                mSelector: kAudioHardwarePropertyProcessObjectList,
+        guard #available(macOS 14.2, *) else { return [] }
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyProcessObjectList,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain
+        )
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(system, &address, 0, nil, &size) == noErr, size > 0 else { return [] }
+        var objects = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(system, &address, 0, nil, &size, &objects) == noErr else { return [] }
+        var pids: Set<pid_t> = []
+        for object in objects {
+            var pidAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyPID,
                 mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain
             )
-            let system = AudioObjectID(kAudioObjectSystemObject)
-            var size: UInt32 = 0
-            guard AudioObjectGetPropertyDataSize(system, &address, 0, nil, &size) == noErr, size > 0 else { return false }
-            var objects = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
-            guard AudioObjectGetPropertyData(system, &address, 0, nil, &size, &objects) == noErr else { return false }
-            for object in objects {
-                var pidAddress = AudioObjectPropertyAddress(
-                    mSelector: kAudioProcessPropertyPID,
-                    mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain
-                )
-                var pid: pid_t = 0
-                var pidSize = UInt32(MemoryLayout<pid_t>.size)
-                guard AudioObjectGetPropertyData(object, &pidAddress, 0, nil, &pidSize, &pid) == noErr,
-                      pid != own else { continue }
-                var runningAddress = AudioObjectPropertyAddress(
-                    mSelector: kAudioProcessPropertyIsRunningOutput,
-                    mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain
-                )
-                var running: UInt32 = 0
-                var runningSize = UInt32(MemoryLayout<UInt32>.size)
-                if AudioObjectGetPropertyData(object, &runningAddress, 0, nil, &runningSize, &running) == noErr,
-                   running != 0 {
-                    return true
-                }
+            var pid: pid_t = 0
+            var pidSize = UInt32(MemoryLayout<pid_t>.size)
+            guard AudioObjectGetPropertyData(object, &pidAddress, 0, nil, &pidSize, &pid) == noErr,
+                  pid != own else { continue }
+            var runningAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyIsRunningOutput,
+                mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain
+            )
+            var running: UInt32 = 0
+            var runningSize = UInt32(MemoryLayout<UInt32>.size)
+            if AudioObjectGetPropertyData(object, &runningAddress, 0, nil, &runningSize, &running) == noErr,
+               running != 0 {
+                pids.insert(pid)
             }
-            return false
         }
-        // Before 14.2: the default output device is running for somebody.
+        return pids
+    }
+
+    /// The default output device id and the number of audio devices, so a
+    /// change to either is noticed (headphones in or out, device switch).
+    private static func currentOutputDeviceAndCount() -> (AudioObjectID, Int) {
+        let system = AudioObjectID(kAudioObjectSystemObject)
         var deviceAddress = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultOutputDevice,
             mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain
         )
         var device = AudioObjectID(kAudioObjectUnknown)
         var deviceSize = UInt32(MemoryLayout<AudioObjectID>.size)
-        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &deviceAddress, 0, nil, &deviceSize, &device) == noErr,
-              device != kAudioObjectUnknown else { return false }
-        var runningAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
+        _ = AudioObjectGetPropertyData(system, &deviceAddress, 0, nil, &deviceSize, &device)
+        var listAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain
         )
-        var running: UInt32 = 0
-        var runningSize = UInt32(MemoryLayout<UInt32>.size)
-        return AudioObjectGetPropertyData(device, &runningAddress, 0, nil, &runningSize, &running) == noErr && running != 0
+        var listSize: UInt32 = 0
+        _ = AudioObjectGetPropertyDataSize(system, &listAddress, 0, nil, &listSize)
+        return (device, Int(listSize) / MemoryLayout<AudioObjectID>.size)
+    }
+
+    private static func processName(_ pid: pid_t) -> String {
+        var buffer = [CChar](repeating: 0, count: 4096)
+        if proc_pidpath(pid, &buffer, 4096) > 0 {
+            return URL(fileURLWithPath: String(cString: buffer)).lastPathComponent
+        }
+        return "pid \(pid)"
     }
 }
 
